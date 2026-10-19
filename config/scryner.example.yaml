@@ -1,0 +1,43 @@
+# Пример конфигурации Scryner. Скопируйте в config/scryner.yaml и заполните.
+
+app:
+  env: dev                 # dev | prod
+  log_level: INFO
+
+bus:
+  backend: memory          # memory | redis
+  redis_url: redis://localhost:6379/0
+
+storage:
+  backend: sqlite          # sqlite | timescale
+  sqlite_path: data/scryner.db
+  timescale_dsn: postgresql://scryner:scryner@localhost:5432/scryner
+  retention:
+    bars_1m_hours: 216     # 9 дней (как у референса)
+    bars_1s_hours: 72
+    events_days: 7
+
+exchanges:
+  binance_futures:
+    enabled: true
+    ws_url: wss://fstream.binance.com/stream
+    rest_url: https://fapi.binance.com
+    streams_per_connection: 200
+    oi_poll_sec: 15
+
+metrics:
+  windows: [1m, 5m, 15m, 1h, 24h]
+  natr_period: 14
+  natr_timeframe: 5m
+  recompute_sec: 1
+
+alerts:
+  defaults:
+    cooldown_min: 15
+    max_active_chart_alerts: 30
+    max_active_per_key: 5
+
+api:
+  host: 0.0.0.0
+  port: 8080
+  client_release_poll_ms: 15000
