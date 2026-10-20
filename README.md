@@ -20,6 +20,17 @@ python -m scryner all --sources hyperliquid_futures,gateio_futures   # или б
 # http://localhost:8080/advanced?route=all_futures
 ```
 
+## Запуск на своём компьютере (Docker, один контейнер)
+
+```bash
+git clone https://github.com/TGG3Consulting/ScrynerNEW.git
+cd ScrynerNEW
+cp config/scryner.example.yaml config/scryner.yaml      # Windows: copy config\scryner.example.yaml config\scryner.yaml
+docker compose -f docker-compose.dev.yml up -d --build  # первая сборка 3–5 минут
+# http://localhost:8080/advanced?route=all_futures
+docker compose -f docker-compose.dev.yml logs -f        # логи; остановить: ... down
+```
+
 ## Запуск (prod, docker compose)
 
 ```bash

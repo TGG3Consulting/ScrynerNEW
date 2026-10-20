@@ -1,0 +1,22 @@
+# Запуск на одном компьютере одним контейнером: все биржи, SQLite, без Redis/TimescaleDB/nginx.
+#   docker compose -f docker-compose.dev.yml up -d --build
+#   http://localhost:8080/advanced?route=all_futures
+services:
+  scryner:
+    build: .
+    restart: unless-stopped
+    command: ["all"]
+    ports: ["8080:8080"]
+    environment:
+      SCRYNER_CONFIG: /app/config/scryner.yaml
+      SCRYNER_APP__ENV: dev
+      SCRYNER_APP__LOG_JSON: "false"
+      SCRYNER_API__DEV_AUTO_LOGIN: "true"       # вход без Telegram, пока бот не настроен
+      SCRYNER_BUS__BACKEND: memory
+      SCRYNER_STORAGE__BACKEND: sqlite
+      SCRYNER_STORAGE__SQLITE_PATH: /app/data/scryner.db
+    volumes:
+      - ./config/scryner.yaml:/app/config/scryner.yaml:ro
+      - scryner-data:/app/data
+volumes:
+  scryner-data: {}
