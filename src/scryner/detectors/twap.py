@@ -28,9 +28,10 @@ from scryner.core.models import make_key
 
 
 class TwapIndexer:
-    def __init__(self, cfg: TwapConfig, on_patch: Any) -> None:
+    def __init__(self, cfg: TwapConfig, on_patch: Any, on_snapshot: Any = None) -> None:
         self.cfg = cfg
-        self.on_patch = on_patch  # async callable(updates: dict, delete: list)
+        self.on_patch = on_patch  # async callable(seq, updates: dict, delete: list)
+        self.on_snapshot = on_snapshot  # async callable() → publish a full snapshot
         self.log = get_logger("twap")
         self.rest = RestClient(cfg.info_url.rsplit("/", 1)[0], rate_per_sec=10)
         self.state: dict[str, dict[str, Any]] = {}
@@ -138,6 +139,8 @@ class TwapIndexer:
         finally:
             await client.close()
         self.log.info("twap_bootstrap", loaded=loaded, tokens=len(tokens))
+        if self.on_snapshot is not None:
+            await self.on_snapshot()
 
     async def run(self) -> None:
         await self.load_meta()

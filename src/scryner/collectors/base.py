@@ -314,9 +314,15 @@ class Collector(ABC):
     def emit_trade(self, inst: Instrument, ts: float, price: float, qty: float, side: str, trade_id: str = "", quote: float | None = None) -> None:
         if price <= 0 or qty <= 0:
             return
-        q = quote if quote is not None else price * qty * inst.contract_multiplier
+        if inst.coi_inverse:
+            # inverse contracts: qty is a USD notional → quote = qty, base = qty / price
+            q = quote if quote is not None else qty * inst.contract_multiplier
+            base_qty = q / price
+        else:
+            q = quote if quote is not None else price * qty * inst.contract_multiplier
+            base_qty = qty * inst.contract_multiplier
         self.stats["trades"] += 1
-        self.sink.on_trade(Trade(key=inst.key, ts=ts, price=price, qty=qty * inst.contract_multiplier, quote=q, side="buy" if side == "buy" else "sell", trade_id=trade_id))
+        self.sink.on_trade(Trade(key=inst.key, ts=ts, price=price, qty=base_qty, quote=q, side="buy" if side == "buy" else "sell", trade_id=trade_id))
 
     def emit_book(self, inst: Instrument, ts: float, bids: list[tuple[float, float]], asks: list[tuple[float, float]], is_snapshot: bool, seq: int = 0, prev_seq: int = 0) -> None:
         self.stats["books"] += 1

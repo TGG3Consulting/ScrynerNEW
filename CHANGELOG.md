@@ -7,6 +7,10 @@
 ## [Unreleased]
 
 ### Added
+- **[WEB]** Веб-клиент: режимы Advanced/Simple/Graph/Tick/Favorites, кабинет, меню настроек,
+  клиентские алерты (порт evaluateAlertState), Telegram-очередь, звук/TTS, терминальные мосты.
+- **[COLLECTOR]** Бэкфилл 1m-свечей для всех бирж; исключены обратные контракты MEXC/KuCoin.
+- **[INFRA]** Dockerfile, docker-compose, nginx, GitHub Actions CI.
 - **[API]** Шлюз FastAPI: все REST-маршруты контракта и 13 WS-каналов (snapshot/patch/seq,
   gzip-фреймы), авторизация через Telegram deep-link, сессии, trial, рефералка, команды,
   конфиги, chart-alerts, mobile/FCM, help-content, админка.

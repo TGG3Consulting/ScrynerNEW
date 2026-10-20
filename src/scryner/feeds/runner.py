@@ -23,7 +23,10 @@ class FeedRunner:
         self.bus = bus
         self.storage = storage
         self.log = get_logger("feeds")
-        self.twap = TwapIndexer(cfg.twap, self._twap_patch)
+        self.twap = TwapIndexer(cfg.twap, self._twap_patch, self._twap_full)
+
+    async def _twap_full(self) -> None:
+        await self.bus.publish("twap", {"type": "snapshot", "seq": self.twap.seq, "data": self.twap.snapshot()})
 
     async def _twap_patch(self, seq: int, updates: dict[str, Any], deletes: list[str]) -> None:
         await self.bus.publish("twap", {"type": "patch", "seq": seq, "updates": updates, "delete": deletes})
@@ -73,7 +76,7 @@ class FeedRunner:
 
     def _recreate(self, name: str) -> Any:
         if name == "twap":
-            self.twap = TwapIndexer(self.cfg.twap, self._twap_patch)
+            self.twap = TwapIndexer(self.cfg.twap, self._twap_patch, self._twap_full)
             return self.twap.run()
         if name == "telegram_channels":
             return TelegramChannels(self.cfg.telegram, self.bus).run()

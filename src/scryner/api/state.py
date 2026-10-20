@@ -92,6 +92,7 @@ class GatewayState:
         # ask workers for a full snapshot (redis mode); in memory mode the records flow in via patches too
         for sid in self.cfg.enabled_sources():
             await self.bus.publish(f"cmd.{sid}", {"type": "snapshot_request"})
+        await self.bus.publish("cmd.twap", {"type": "snapshot_request"})
 
     async def stop(self) -> None:
         for t in self._tasks:

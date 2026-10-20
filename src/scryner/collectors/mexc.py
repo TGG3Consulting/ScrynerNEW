@@ -200,6 +200,8 @@ class MexcFutures(Collector):
         for s in d.get("data", []):
             if s.get("state") != 0 or s.get("apiAllowed") is False:
                 continue
+            if s.get("settleCoin") and s.get("settleCoin") != s.get("quoteCoin"):
+                continue  # coin-margined (inverse) contracts are quoted in contracts, not USD
             out.append(self.make_instrument(
                 native_symbol=s["symbol"], pair=s["symbol"], base=s["baseCoin"], quote=s["quoteCoin"],
                 tick_size=f(s.get("priceUnit")), step_size=f(s.get("contractSize"), 1.0), multiplier=f(s.get("contractSize"), 1.0),

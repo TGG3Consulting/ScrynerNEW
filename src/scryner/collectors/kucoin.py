@@ -36,6 +36,8 @@ class _KuCoin(Collector):
             for s in d.get("data", []):
                 if s.get("status") != "Open" or s.get("type") != "FFWCSX":  # perpetual
                     continue
+                if s.get("isInverse") or s.get("settleCurrency") != s.get("quoteCurrency"):
+                    continue  # inverse contracts excluded (quote volume is not in USD)
                 out.append(self.make_instrument(
                     native_symbol=s["symbol"], pair=s["symbol"], base=s["baseCurrency"], quote=s["quoteCurrency"],
                     tick_size=f(s.get("tickSize")), step_size=f(s.get("multiplier"), 1.0), multiplier=f(s.get("multiplier"), 1.0),
