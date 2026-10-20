@@ -100,7 +100,9 @@ bots:
 
 twap:
   info_url: https://api.hyperliquid.xyz/info
-  explorer_ws_url: wss://api.hyperliquid.xyz/ws
+  explorer_ws_url: wss://rpc.hyperliquid.xyz/ws
+  hypurrscan_url: https://api.hypurrscan.io
+  bootstrap_from_hypurrscan: true
   poll_sec: 2.0
   banned_tokens: [bnb, btc, eth, paxg]
   banned_prefixes: ["cash:", "vntl:", "xyz:"]
@@ -123,6 +125,13 @@ api:
   session_ttl_days: 30
   login_token_ttl_sec: 600
   chart_alerts: {max_active: 30, max_active_per_key: 5}
+  trial_days: 3
+  admin_telegram_ids: []        # Telegram id администраторов
+  dev_auto_login: false         # dev: автоматический вход без Telegram (только env=dev)
+  public_url: http://localhost:8080
+  max_saved_configs: 20
+  candidates_limit_max: 96
+  web_dir: web/dist
 
 telegram:
   bot_token: ""            # бот для входа и уведомлений

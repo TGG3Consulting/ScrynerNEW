@@ -135,7 +135,9 @@ class BotConfig(BaseModel):
 
 class TwapConfig(BaseModel):
     info_url: str = "https://api.hyperliquid.xyz/info"
-    explorer_ws_url: str = "wss://api.hyperliquid.xyz/ws"
+    explorer_ws_url: str = "wss://rpc.hyperliquid.xyz/ws"
+    hypurrscan_url: str = "https://api.hypurrscan.io"
+    bootstrap_from_hypurrscan: bool = True
     poll_sec: float = 2.0
     banned_tokens: list[str] = Field(default_factory=lambda: ["bnb", "btc", "eth", "paxg"])
     banned_prefixes: list[str] = Field(default_factory=lambda: ["cash:", "vntl:", "xyz:"])
@@ -166,11 +168,20 @@ class ApiConfig(BaseModel):
     session_ttl_days: int = 30
     login_token_ttl_sec: int = 600
     chart_alerts: ChartAlertsConfig = ChartAlertsConfig()
+    trial_days: int = 3
+    admin_telegram_ids: list[int] = Field(default_factory=list)
+    dev_auto_login: bool = False
+    dev_auto_login_telegram_id: int = 1
+    public_url: str = "http://localhost:8080"
+    max_saved_configs: int = 20
+    candidates_limit_max: int = 96
+    web_dir: str = "web/dist"
 
 
 class TelegramConfig(BaseModel):
     bot_token: str = ""
     bot_username: str = ""
+    bot_poll_timeout_sec: int = 25
     api_id: int = 0
     api_hash: str = ""
     session_name: str = "scryner_reader"

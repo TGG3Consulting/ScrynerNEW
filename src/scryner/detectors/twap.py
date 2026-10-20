@@ -114,10 +114,36 @@ class TwapIndexer:
                 "min_usd_per_minute_by_token": self.cfg.min_usd_per_minute_by_token}
 
     # ------------------------------------------------------------------ explorer stream
+    async def bootstrap(self) -> None:
+        """Load currently active TWAPs from hypurrscan (``/twap/{token}``, same tx format)."""
+        if not self.cfg.bootstrap_from_hypurrscan:
+            return
+        client = RestClient(self.cfg.hypurrscan_url, rate_per_sec=12)
+        tokens = list(self.perp_names) + [t.get("name", "") for t in self.spot_tokens.values()]
+        loaded = 0
+        try:
+            for tok in tokens:
+                if not tok:
+                    continue
+                try:
+                    txs = await client.get(f"/twap/{tok}", retries=0)
+                except Exception:
+                    continue
+                if isinstance(txs, list) and txs:
+                    now_ms = int(time.time() * 1000)
+                    fresh = [tx for tx in txs if int(tx.get("time", 0)) + int(((tx.get("action") or {}).get("twap") or {}).get("m", 0)) * 60_000 > now_ms]
+                    if fresh:
+                        await self._on_message(fresh)
+                        loaded += len(fresh)
+        finally:
+            await client.close()
+        self.log.info("twap_bootstrap", loaded=loaded, tokens=len(tokens))
+
     async def run(self) -> None:
         await self.load_meta()
         self.state["__bans__"] = self.bans_record()
         await self.load_prices()
+        await self.bootstrap()
         self._ws = WsClient(self.cfg.explorer_ws_url, self._on_message, name="hl-explorer", on_open=self._on_open, ping_interval=None,
                             app_ping=lambda: orjson.dumps({"method": "ping"}).decode(), app_ping_interval=30)
         tasks = [asyncio.create_task(self._ws.run()), asyncio.create_task(self._price_loop()), asyncio.create_task(self._expiry_loop()),
@@ -130,32 +156,38 @@ class TwapIndexer:
             await self.rest.close()
 
     async def _on_open(self, ws: WsClient) -> None:
-        await ws.send_json({"method": "subscribe", "subscription": {"type": "explorerBlock"}})
+        # explorerTxs (rpc.hyperliquid.xyz) streams every L1 transaction as a bare JSON list
+        await ws.send_json({"method": "subscribe", "subscription": {"type": "explorerTxs"}})
 
     async def _on_message(self, msg: Any) -> None:
-        if not isinstance(msg, dict):
-            return
-        data = msg.get("data")
-        if msg.get("channel") != "explorerBlock" or not isinstance(data, list):
+        if isinstance(msg, dict):
+            data = msg.get("data")
+            txs = data if isinstance(data, list) else []
+        elif isinstance(msg, list):
+            txs = msg
+        else:
             return
         updates: dict[str, Any] = {}
         deletes: list[str] = []
-        for block in data:
-            height = int(block.get("height", 0))
-            for tx in block.get("txs", []):
-                action = tx.get("action") or {}
-                atype = action.get("type")
-                if atype == "twapOrder":
-                    rec = self._twap_record(tx, action, height)
-                    if rec is not None:
-                        updates[f"t:{rec['hash']}"] = rec
-                        updates[f"p:{rec['hash']}"] = {"kind": "presence", "id": rec["hash"]}
-                elif atype == "twapCancel":
-                    asset = int(action.get("a", -1))
-                    tid = action.get("t")
-                    for k, v in list(self.state.items()):
-                        if k.startswith("t:") and v.get("twap_id") == tid and v.get("asset") == asset:
-                            deletes.extend([k, f"p:{v['hash']}"])
+        for tx in txs:
+            if not isinstance(tx, dict):
+                continue
+            action = tx.get("action") or {}
+            atype = action.get("type")
+            height = int(tx.get("block", 0) or 0)
+            if atype == "twapOrder":
+                rec = self._twap_record(tx, action, height)
+                if rec is not None:
+                    updates[f"t:{rec['hash']}"] = rec
+                    updates[f"p:{rec['hash']}"] = {"kind": "presence", "id": rec["hash"]}
+            elif atype == "twapCancel":
+                asset = int(action.get("a", -1))
+                user = str(tx.get("user", "")).lower()
+                # cancel references the on-chain twap id; we match the user's latest TWAP on that asset
+                for k, v in sorted(((k, v) for k, v in self.state.items() if k.startswith("t:")), key=lambda kv: -kv[1].get("time_ms", 0)):
+                    if v.get("asset") == asset and str(v.get("user", "")).lower() == user:
+                        deletes.extend([k, f"p:{v['hash']}"])
+                        break
         for k, v in updates.items():
             self.state[k] = v
         for k in deletes:
