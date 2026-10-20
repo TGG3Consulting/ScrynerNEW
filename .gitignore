@@ -17,3 +17,4 @@ build/
 .idea/
 .vscode/
 config/scryner.yaml
+web/node_modules/
