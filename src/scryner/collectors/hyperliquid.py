@@ -85,7 +85,7 @@ class _Hyperliquid(Collector):
             bids = [(f(x["px"]), f(x["sz"])) for x in lv[0]]
             asks = [(f(x["px"]), f(x["sz"])) for x in lv[1]]
             self.emit_book(inst, parse_ts(data.get("time")), bids, asks, True)
-        elif ch == "activeAssetCtx" and isinstance(data, dict):
+        elif ch in ("activeAssetCtx", "activeSpotAssetCtx") and isinstance(data, dict):  # spot ctx arrives on activeSpotAssetCtx
             inst = self.by_native.get(data.get("coin", ""))
             if inst is None:
                 return
