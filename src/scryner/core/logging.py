@@ -27,5 +27,5 @@ def setup_logging(level: str = "INFO", json_output: bool = True) -> None:
     )
 
 
-def get_logger(name: str, **ctx: object) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(name).bind(**ctx)  # type: ignore[no-any-return]
+def get_logger(logger_name: str, **ctx: object) -> structlog.stdlib.BoundLogger:
+    return structlog.get_logger(logger_name).bind(**ctx)  # type: ignore[no-any-return]

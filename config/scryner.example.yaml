@@ -1,11 +1,13 @@
-# Пример конфигурации Scryner. Скопируйте в config/scryner.yaml и заполните.
+# Пример конфигурации Scryner. Скопируйте в config/scryner.yaml и заполните секреты.
 
 app:
   env: dev                 # dev | prod
   log_level: INFO
+  log_json: true
+  instance_id: scryner-1
 
 bus:
-  backend: memory          # memory | redis
+  backend: memory          # memory (один процесс) | redis (воркер на биржу + шлюз)
   redis_url: redis://localhost:6379/0
 
 storage:
@@ -15,29 +17,130 @@ storage:
   retention:
     bars_1m_hours: 216     # 9 дней (как у референса)
     bars_1s_hours: 72
+    bars_1s_memory_minutes: 30
+    clusters_days: 30
     events_days: 7
 
+# Источники. Ключ = source_route_id. Порты — как у референса (внутренние адреса воркеров).
 exchanges:
-  binance_futures:
-    enabled: true
-    ws_url: wss://fstream.binance.com/stream
-    rest_url: https://fapi.binance.com
-    streams_per_connection: 200
-    oi_poll_sec: 15
+  binance_futures:   {exchange: binance,     market_type: futures, title: "Binance Futures",   port: 8700,  rest_url: "https://fapi.binance.com",          ws_url: "wss://fstream.binance.com",             streams_per_connection: 100, oi_poll_sec: 30}
+  binance_spot:      {exchange: binance,     market_type: spot,    title: "Binance Spot",      port: 8701,  rest_url: "https://api.binance.com",           ws_url: "wss://stream.binance.com:9443",         streams_per_connection: 100}
+  binance_alpha:     {exchange: binance_alpha, market_type: spot,  title: "Binance Alpha",     port: 8702,  rest_url: "https://www.binance.com",           ws_url: "",                                      extra: {trade_poll_sec: 2.0}}
+  bybit_futures:     {exchange: bybit,       market_type: futures, title: "Bybit Futures",     port: 8300,  rest_url: "https://api.bybit.com",             ws_url: "wss://stream.bybit.com/v5/public/linear", streams_per_connection: 150}
+  bybit_spot:        {exchange: bybit,       market_type: spot,    title: "Bybit Spot",        port: 8301,  rest_url: "https://api.bybit.com",             ws_url: "wss://stream.bybit.com/v5/public/spot",   streams_per_connection: 150}
+  okx_futures:       {exchange: okx,         market_type: futures, title: "OKX Futures",       port: 9300,  rest_url: "https://www.okx.com",               ws_url: "wss://ws.okx.com:8443/ws/v5/public",    streams_per_connection: 100}
+  okx_spot:          {exchange: okx,         market_type: spot,    title: "OKX Spot",          port: 9301,  rest_url: "https://www.okx.com",               ws_url: "wss://ws.okx.com:8443/ws/v5/public",    streams_per_connection: 100}
+  bitget_futures:    {exchange: bitget,      market_type: futures, title: "Bitget Futures",    port: 8100,  rest_url: "https://api.bitget.com",            ws_url: "wss://ws.bitget.com/v2/ws/public",      streams_per_connection: 100}
+  bitget_spot:       {exchange: bitget,      market_type: spot,    title: "Bitget Spot",       port: 8101,  rest_url: "https://api.bitget.com",            ws_url: "wss://ws.bitget.com/v2/ws/public",      streams_per_connection: 100}
+  gateio_futures:    {exchange: gateio,      market_type: futures, title: "Gate.io Futures",   port: 8500,  rest_url: "https://api.gateio.ws",             ws_url: "wss://fx-ws.gateio.ws/v4/ws/usdt",      streams_per_connection: 100}
+  gateio_spot:       {exchange: gateio,      market_type: spot,    title: "Gate.io Spot",      port: 8501,  rest_url: "https://api.gateio.ws",             ws_url: "wss://api.gateio.ws/ws/v4/",            streams_per_connection: 100}
+  mexc_futures:      {exchange: mexc,        market_type: futures, title: "MEXC Futures",      port: 10200, rest_url: "https://contract.mexc.com",         ws_url: "wss://contract.mexc.com/edge",          streams_per_connection: 100}
+  mexc_spot:         {exchange: mexc,        market_type: spot,    title: "MEXC Spot",         port: 10201, rest_url: "https://api.mexc.com",              ws_url: "wss://wbs-api.mexc.com/ws",             streams_per_connection: 30}
+  kucoin_futures:    {exchange: kucoin,      market_type: futures, title: "KuCoin Futures",    port: 9000,  rest_url: "https://api-futures.kucoin.com",    ws_url: "",                                      streams_per_connection: 100}
+  kucoin_spot:       {exchange: kucoin,      market_type: spot,    title: "KuCoin Spot",       port: 9001,  rest_url: "https://api.kucoin.com",            ws_url: "",                                      streams_per_connection: 100}
+  htx_futures:       {exchange: htx,         market_type: futures, title: "HTX Futures",       port: 9100,  rest_url: "https://api.hbdm.com",              ws_url: "wss://api.hbdm.com/linear-swap-ws",     streams_per_connection: 100}
+  kraken_futures:    {exchange: kraken,      market_type: futures, title: "Kraken Futures",    port: 9400,  rest_url: "https://futures.kraken.com",        ws_url: "wss://futures.kraken.com/ws/v1",        streams_per_connection: 200, quote_whitelist: [USD, USDT, USDC]}
+  kraken_spot:       {exchange: kraken,      market_type: spot,    title: "Kraken Spot",       port: 9401,  rest_url: "https://api.kraken.com",            ws_url: "wss://ws.kraken.com/v2",                streams_per_connection: 200, quote_whitelist: [USD, USDT, USDC, EUR]}
+  coinbase_spot:     {exchange: coinbase,    market_type: spot,    title: "Coinbase",          port: 9500,  rest_url: "https://api.exchange.coinbase.com", ws_url: "wss://ws-feed.exchange.coinbase.com",   streams_per_connection: 100, quote_whitelist: [USD, USDT, USDC]}
+  upbit_spot:        {exchange: upbit,       market_type: spot,    title: "Upbit",             port: 9600,  rest_url: "https://api.upbit.com",             ws_url: "wss://api.upbit.com/websocket/v1",      streams_per_connection: 200, quote_whitelist: [KRW, USDT]}
+  hyperliquid_futures: {exchange: hyperliquid, market_type: futures, title: "Hyperliquid",     port: 9200,  rest_url: "https://api.hyperliquid.xyz",       ws_url: "wss://api.hyperliquid.xyz/ws",          streams_per_connection: 100, quote_whitelist: [USDC]}
+  hyperliquid_spot:  {exchange: hyperliquid, market_type: spot,    title: "Hyperliquid Spot",  port: 9201,  rest_url: "https://api.hyperliquid.xyz",       ws_url: "wss://api.hyperliquid.xyz/ws",          streams_per_connection: 100, quote_whitelist: [USDC]}
+  aster_futures:     {exchange: aster,       market_type: futures, title: "Aster Futures",     port: 10000, rest_url: "https://fapi.asterdex.com",         ws_url: "wss://fstream.asterdex.com",            streams_per_connection: 100, oi_poll_sec: 30}
+  aster_spot:        {exchange: aster,       market_type: spot,    title: "Aster Spot",        port: 10001, rest_url: "https://sapi.asterdex.com",         ws_url: "wss://sstream.asterdex.com",            streams_per_connection: 100}
+  apex_futures:      {exchange: apex,        market_type: futures, title: "ApeX",              port: 10600, rest_url: "https://omni.apex.exchange",        ws_url: "wss://quote.omni.apex.exchange/realtime_public?v=2", streams_per_connection: 100}
+  lighter_futures:   {exchange: lighter,     market_type: futures, title: "Lighter",           port: 10800, rest_url: "https://mainnet.zklighter.elliot.ai", ws_url: "wss://mainnet.zklighter.elliot.ai/stream", streams_per_connection: 100, quote_whitelist: [USDC], extra: {ws_headers: {Origin: "https://app.lighter.xyz"}}}
 
 metrics:
-  windows: [1m, 5m, 15m, 1h, 24h]
+  windows_sec: [60, 300, 900, 3600]
   natr_period: 14
-  natr_timeframe: 5m
-  recompute_sec: 1
+  natr_bar_sec: 300
+  reset_interval_min: 5
+  oi2_reset_interval_min: 1440
+  spike_lookback_sec: 3600
+  recompute_sec: 1.0
+  publish_sec: 4.0
+  activity_lookback_windows: 60
 
-alerts:
-  defaults:
-    cooldown_min: 15
-    max_active_chart_alerts: 30
-    max_active_per_key: 5
+ticks:
+  threshold_power: 0.56
+  threshold_coef_futures: 0.0857142857
+  threshold_coef_spot: 0.0514285714
+  threshold_coef_by_exchange: {aster: 0.0285714286}
+  threshold_min: 100
+  threshold_max: 25000
+  threshold_min_by_exchange: {htx: 50}
+  threshold_refresh_sec: 60
+
+density:
+  min_size_usd_default: 100000
+  min_size_usd_by_exchange: {}
+  neighbour_levels: 10
+  dominance_ratio: 5.0
+  min_lifetime_sec: 20
+  max_distance_pct: 3.0
+  iceberg_refill_ratio: 0.8
+  impact_windows_sec: [300, 900]
+  impact_good_pct: 0.05
+  cooldown_sec: 600
+  history_size: 80
+
+bots:
+  min_series: 5
+  max_gap_sec: 30
+  p1_interval_tolerance: 0.25
+  p1_size_tolerance: 0.15
+  c1_window_sec: 300
+  c1_min_trades: 8
+  c1_min_side_share: 0.75
+  s1_min_pairs: 4
+  s1_size_tolerance: 0.1
+  min_tick_volume_usd: 50
+  min_tick_move_pct: 0.0
+  history_size: 80
+
+twap:
+  info_url: https://api.hyperliquid.xyz/info
+  explorer_ws_url: wss://api.hyperliquid.xyz/ws
+  poll_sec: 2.0
+  banned_tokens: [bnb, btc, eth, paxg]
+  banned_prefixes: ["cash:", "vntl:", "xyz:"]
+  min_usd_per_minute_default: 10000
 
 api:
   host: 0.0.0.0
   port: 8080
   client_release_poll_ms: 15000
+  client_version: dev
+  top_limit_default: 50
+  top_limit_max: 200
+  alerts_limit_max: 20000
+  history_max_items: 64
+  history_1m_limit: 360
+  history_1s_limit: 1800
+  ws_ping_sec: 25
+  patch_interval_sec: 4.0
+  cookie_name: scryner_session
+  session_ttl_days: 30
+  login_token_ttl_sec: 600
+  chart_alerts: {max_active: 30, max_active_per_key: 5}
+
+telegram:
+  bot_token: ""            # бот для входа и уведомлений
+  bot_username: ""
+  api_id: 0                # Telethon-клиент для чтения каналов (новости/ончейн/листинги)
+  api_hash: ""
+  session_name: scryner_reader
+  news_channels: [markettwits]
+  onchain_channels: [OnChainIntrigue, lookonchain]
+  listings_channels: []
+  history_size: 80
+
+fcm:
+  project_id: ""
+  credentials_path: ""
+  pairing_code_ttl_sec: 180
+
+stocks:
+  reference_source: tradingview
+  tradingview_ws_url: wss://data.tradingview.com/socket.io/websocket
+  poll_sec: 5
