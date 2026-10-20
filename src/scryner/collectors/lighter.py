@@ -11,8 +11,8 @@ from typing import Any
 
 import orjson
 
-from scryner.core.models import Instrument
-from scryner.core.timeutil import parse_ts
+from scryner.core.models import Bar, Instrument
+from scryner.core.timeutil import now, parse_ts
 
 from . import register
 from .base import Collector, WsClient, chunks, f
@@ -85,3 +85,16 @@ class LighterFutures(Collector):
             if st.get("open_interest") is not None:
                 oi = f(st.get("open_interest"))
                 self.emit_oi(inst, ts, oi, oi * mark if mark else None)
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        end = int(now())
+        d = await self.rest.get("/api/v1/candlesticks", params={"market_id": inst.native_symbol, "resolution": "1m", "start_timestamp": end - limit * 60, "end_timestamp": end, "count_back": min(limit, 1000)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in d.get("candlesticks", []):
+            ts = int(int(r["timestamp"]) // 1000) if int(r["timestamp"]) > 1e11 else int(r["timestamp"])
+            if ts >= now_min:
+                continue
+            total = f(r.get("quote_token_volume"))
+            out.append(Bar(ts=ts, o=f(r["open"]), h=f(r["high"]), l=f(r["low"]), c=f(r["close"]), total_quote=total, trades_count=int(r.get("trades") or 0), had_trade=total > 0))
+        return out

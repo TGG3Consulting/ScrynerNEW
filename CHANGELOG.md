@@ -7,6 +7,14 @@
 ## [Unreleased]
 
 ### Added
+- **[API]** Шлюз FastAPI: все REST-маршруты контракта и 13 WS-каналов (snapshot/patch/seq,
+  gzip-фреймы), авторизация через Telegram deep-link, сессии, trial, рефералка, команды,
+  конфиги, chart-alerts, mobile/FCM, help-content, админка.
+- **[FEEDS]** Telegram-бот, читатель Telegram-каналов (Telethon), TWAP-индексатор Hyperliquid
+  (explorerTxs + bootstrap hypurrscan), котировки акций TradingView, FCM push.
+- **[CORE]** Хранилище SQLite/TimescaleDB, воркер источника, детекторы плотностей и ботов.
+- **[COLLECTOR]** Коллекторы 26 источников на 15 биржах, живые проверки.
+- **[METRICS]** Движок метрик, кольцевые буферы баров, кластеры, COI, формула tick_threshold.
 - **[DOCS]** `docs/analysis/GODSEYE_REALTIME_PROTOCOL.md` — протокол реального времени по
   полной HAR-записи: 13 WS-каналов, snapshot/patch/seq, поля записей, формула tick_threshold,
   клиентская логика алертов, боты, TWAP, терминалы, остальные REST-вызовы.

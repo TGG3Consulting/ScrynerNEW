@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -184,6 +184,18 @@ class _BinanceLike(Collector):
 
         await asyncio.gather(*(one(i) for i in instruments))
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        rows = await self.rest.get(f"{self.rest_prefix}/klines", params={"symbol": inst.native_symbol, "interval": "1m", "limit": min(limit, 1000)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in rows:
+            ts = int(int(r[0]) // 1000)
+            if ts >= now_min:
+                continue
+            total, buy = f(r[7]), f(r[10])
+            out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), buy_quote=buy, sell_quote=max(0.0, total - buy), total_quote=total,
+                           trades_count=int(r[8] or 0), had_trade=int(r[8] or 0) > 0))
+        return out
 
 @register("binance_futures")
 class BinanceFutures(_BinanceLike):

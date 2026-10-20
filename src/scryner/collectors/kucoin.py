@@ -13,7 +13,7 @@ from typing import Any
 
 import orjson
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -134,6 +134,28 @@ class _KuCoin(Collector):
         # OI arrives together with the ticker poll (same endpoint); nothing extra to do.
         return None
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        if self.futures:
+            end_ms = int(now() * 1000)
+            d = await self.rest.get("/api/v1/kline/query", params={"symbol": inst.native_symbol, "granularity": 1, "from": end_ms - limit * 60_000, "to": end_ms}, retries=1)
+            for r in d.get("data", []):  # [time, o, h, l, c, volume(contracts)]
+                ts = int(int(r[0]) // 1000)
+                if ts >= now_min:
+                    continue
+                total = f(r[5]) * inst.contract_multiplier * f(r[4])
+                out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), total_quote=total, had_trade=total > 0))
+        else:
+            end = int(now())
+            d = await self.rest.get("/api/v1/market/candles", params={"symbol": inst.native_symbol, "type": "1min", "startAt": end - limit * 60, "endAt": end}, retries=1)
+            for r in reversed(d.get("data", [])):  # [time, o, c, h, l, volume, turnover]
+                ts = int(r[0])
+                if ts >= now_min:
+                    continue
+                total = f(r[6])
+                out.append(Bar(ts=ts, o=f(r[1]), h=f(r[3]), l=f(r[4]), c=f(r[2]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("kucoin_spot")
 class KuCoinSpot(_KuCoin):

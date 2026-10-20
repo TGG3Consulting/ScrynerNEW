@@ -12,7 +12,7 @@ from typing import Any
 
 import orjson
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -99,6 +99,18 @@ class _Hyperliquid(Collector):
                 oi = f(ctx.get("openInterest"))
                 self.emit_oi(inst, ts, oi, oi * mark if mark else None)
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        end_ms = int(now() * 1000)
+        rows = await self.rest.post("/info", json={"type": "candleSnapshot", "req": {"coin": inst.native_symbol, "interval": "1m", "startTime": end_ms - limit * 60_000, "endTime": end_ms}}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in rows or []:
+            ts = int(int(r["t"]) // 1000)
+            if ts >= now_min:
+                continue
+            total = f(r.get("v")) * f(r.get("c"))
+            out.append(Bar(ts=ts, o=f(r["o"]), h=f(r["h"]), l=f(r["l"]), c=f(r["c"]), total_quote=total, trades_count=int(r.get("n") or 0), had_trade=total > 0))
+        return out
 
 @register("hyperliquid_futures")
 class HyperliquidPerp(_Hyperliquid):

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -81,3 +81,15 @@ class CoinbaseSpot(Collector):
                                  high_24h=f(d.get("high")), low_24h=f(d.get("low")))
 
         await asyncio.gather(*(one(i) for i in instruments))
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        rows = await self.rest.get(f"/products/{inst.native_symbol}/candles", params={"granularity": 60}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in reversed(rows[: min(limit, 300)]):  # [time, low, high, open, close, volume]
+            ts = int(r[0])
+            if ts >= now_min:
+                continue
+            total = f(r[5]) * f(r[4])
+            out.append(Bar(ts=ts, o=f(r[3]), h=f(r[2]), l=f(r[1]), c=f(r[4]), total_quote=total, had_trade=total > 0))
+        return out

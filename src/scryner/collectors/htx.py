@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -101,3 +101,15 @@ class HtxFutures(Collector):
             if inst is None:
                 continue
             self.emit_oi(inst, ts, f(s.get("volume")), f(s.get("value")) or None)
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        d = await self.rest.get("/linear-swap-ex/market/history/kline", params={"contract_code": inst.native_symbol, "period": "1min", "size": min(limit, 2000)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in d.get("data", []):
+            ts = int(r["id"])
+            if ts >= now_min:
+                continue
+            total = f(r.get("trade_turnover"))
+            out.append(Bar(ts=ts, o=f(r["open"]), h=f(r["high"]), l=f(r["low"]), c=f(r["close"]), total_quote=total, trades_count=int(r.get("count") or 0), had_trade=total > 0))
+        return out

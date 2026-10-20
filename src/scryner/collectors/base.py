@@ -25,7 +25,7 @@ import websockets
 
 from scryner.core.config import ExchangeConfig
 from scryner.core.logging import get_logger
-from scryner.core.models import BookUpdate, Instrument, OIUpdate, TickerUpdate, Trade
+from scryner.core.models import Bar, BookUpdate, Instrument, OIUpdate, TickerUpdate, Trade
 
 
 class CollectorSink(Protocol):
@@ -281,6 +281,10 @@ class Collector(ABC):
     async def poll_tickers(self, instruments: list[Instrument]) -> None:
         """Fetch 24h tickers via REST (override when the exchange has no ticker stream)."""
         return None
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        """Historical 1-minute bars (oldest first) used to seed metrics at startup. Override per exchange."""
+        return []
 
     # -------------------------------------------------------------- helpers
     def instrument(self, native_symbol: str) -> Instrument | None:

@@ -9,8 +9,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from scryner.core.models import Instrument
-from scryner.core.timeutil import parse_ts
+from scryner.core.models import Bar, Instrument
+from scryner.core.timeutil import now, parse_ts
 
 from . import register
 from .base import Collector, WsClient, chunks, f
@@ -63,3 +63,15 @@ class UpbitSpot(Collector):
             self.emit_ticker(inst, parse_ts(msg.get("timestamp")), volume_24h=f(msg.get("acc_trade_price_24h")),
                              price_change_24h_pct=f(msg.get("signed_change_rate")) * 100.0, last_price=f(msg.get("trade_price")),
                              high_24h=f(msg.get("high_price")), low_24h=f(msg.get("low_price")))
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        rows = await self.rest.get("/v1/candles/minutes/1", params={"market": inst.native_symbol, "count": min(limit, 200)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in reversed(rows):
+            ts = int(int(r["timestamp"]) // 1000 // 60) * 60
+            if ts >= now_min:
+                continue
+            total = f(r.get("candle_acc_trade_price"))
+            out.append(Bar(ts=ts, o=f(r["opening_price"]), h=f(r["high_price"]), l=f(r["low_price"]), c=f(r["trade_price"]), total_quote=total, had_trade=total > 0))
+        return out

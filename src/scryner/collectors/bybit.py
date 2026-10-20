@@ -10,7 +10,7 @@ from typing import Any
 
 import orjson
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -111,6 +111,17 @@ class _Bybit(Collector):
             if self.category == "linear" and t.get("openInterest"):
                 self.emit_oi(inst, ts, f(t["openInterest"]), f(t.get("openInterestValue")) if t.get("openInterestValue") else None)
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        d = await self.rest.get("/v5/market/kline", params={"category": self.category, "symbol": inst.native_symbol, "interval": "1", "limit": min(limit, 1000)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in reversed(d.get("result", {}).get("list", [])):  # newest first in the response
+            ts = int(int(r[0]) // 1000)
+            if ts >= now_min:
+                continue
+            total = f(r[6])
+            out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("bybit_futures")
 class BybitFutures(_Bybit):

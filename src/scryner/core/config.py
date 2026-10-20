@@ -84,6 +84,7 @@ class MetricsConfig(BaseModel):
     recompute_sec: float = 1.0
     publish_sec: float = 4.0
     activity_lookback_windows: int = 60
+    backfill_minutes: int = 180  # 1m klines fetched at startup so NATR/spike are available immediately
 
 
 class TickConfig(BaseModel):

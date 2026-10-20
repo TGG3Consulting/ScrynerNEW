@@ -11,8 +11,8 @@ from typing import Any
 
 import orjson
 
-from scryner.core.models import Instrument
-from scryner.core.timeutil import parse_ts
+from scryner.core.models import Bar, Instrument
+from scryner.core.timeutil import now, parse_ts
 
 from . import register
 from .base import Collector, WsClient, chunks, f, levels
@@ -84,3 +84,18 @@ class ApexFutures(Collector):
                     self.emit_ticker(inst, ts, **fields)
                 if "openInterest" in data:
                     self.emit_oi(inst, ts, f(data["openInterest"]), None)
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        end = int(now())
+        d = await self.rest.get("/api/v3/klines", params={"symbol": inst.native_symbol, "interval": "1", "start": end - limit * 60, "end": end, "limit": min(limit, 200)}, retries=1)
+        data = d.get("data") or {}
+        rows = data.get(inst.native_symbol) if isinstance(data, dict) else data
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in rows or []:
+            ts = int(int(r.get("t") or r.get("start") or 0) // 1000)
+            if ts >= now_min or ts == 0:
+                continue
+            total = f(r.get("tr") or r.get("turnover"))
+            out.append(Bar(ts=ts, o=f(r.get("o")), h=f(r.get("h")), l=f(r.get("l")), c=f(r.get("c")), total_quote=total, had_trade=total > 0))
+        return out

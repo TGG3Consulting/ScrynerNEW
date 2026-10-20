@@ -12,7 +12,7 @@ import asyncio
 import time
 from typing import Any
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -131,6 +131,26 @@ class _Gate(Collector):
                     self.emit_ticker(inst, ts, volume_24h=f(t.get("quote_volume")), price_change_24h_pct=f(t.get("change_percentage")),
                                      last_price=f(t.get("last")), high_24h=f(t.get("high_24h")), low_24h=f(t.get("low_24h")))
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        if self.futures:
+            rows = await self.rest.get("/api/v4/futures/usdt/candlesticks", params={"contract": inst.native_symbol, "interval": "1m", "limit": min(limit, 2000)}, retries=1)
+            for r in rows:
+                ts = int(r["t"])
+                if ts >= now_min:
+                    continue
+                total = f(r.get("sum"))
+                out.append(Bar(ts=ts, o=f(r["o"]), h=f(r["h"]), l=f(r["l"]), c=f(r["c"]), total_quote=total, had_trade=total > 0))
+        else:
+            rows = await self.rest.get("/api/v4/spot/candlesticks", params={"currency_pair": inst.native_symbol, "interval": "1m", "limit": min(limit, 1000)}, retries=1)
+            for r in rows:  # [t, quote_vol, c, h, l, o, base_vol, closed]
+                ts = int(r[0])
+                if ts >= now_min or str(r[7]).lower() != "true":
+                    continue
+                total = f(r[1])
+                out.append(Bar(ts=ts, o=f(r[5]), h=f(r[3]), l=f(r[4]), c=f(r[2]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("gateio_futures")
 class GateFutures(_Gate):

@@ -171,21 +171,43 @@ class SourceWorker:
         self._stop.set()
 
     async def _seed_history(self) -> None:
-        if self.storage is None:
-            return
+        """Seed 1m rings: from storage first, then backfill the gap from exchange klines."""
         await asyncio.sleep(5)  # wait for the catalog
         since = int(time.time()) - self.cfg.storage.retention.bars_1m_hours * 3600
-        n = 0
-        for key in self.catalog.keys(self.sid):
-            try:
-                bars = await self.storage.read_bars_1m(key, since, 60 * 48)
-            except Exception as exc:
-                self.log.warning("seed_error", key=key, error=str(exc)[:100])
-                break
+        n_db = 0
+        n_ex = 0
+        want = int(self.source.extra.get("backfill_minutes", self.cfg.metrics.backfill_minutes))
+        sem = asyncio.Semaphore(int(self.source.extra.get("backfill_concurrency", 4)))
+
+        async def one(key: str) -> None:
+            nonlocal n_db, n_ex
+            bars: list[Bar] = []
+            if self.storage is not None:
+                try:
+                    bars = await self.storage.read_bars_1m(key, since, 60 * 48)
+                except Exception as exc:
+                    self.log.warning("seed_db_error", key=key, error=str(exc)[:100])
+            n_db += len(bars)
+            last_ts = bars[-1].ts if bars else 0
+            missing = int((time.time() - last_ts) // 60) if last_ts else want
+            inst = self.catalog.get(key)
+            if want > 0 and missing > 5 and inst is not None:
+                async with sem:
+                    try:
+                        fresh = await self.collector.fetch_klines_1m(inst, min(want, missing))
+                    except Exception as exc:
+                        self.log.debug("seed_kline_error", key=key, error=str(exc)[:100])
+                        fresh = []
+                fresh = [b for b in fresh if b.ts > last_ts]
+                bars.extend(fresh)
+                n_ex += len(fresh)
+                if fresh:
+                    self._pending_bars.extend((key, b) for b in fresh)
             if bars:
                 self.engine.seed_bars_1m(key, bars)
-                n += len(bars)
-        self.log.info("seeded_bars", bars=n)
+
+        await asyncio.gather(*(one(k) for k in self.catalog.keys(self.sid)))
+        self.log.info("seeded_bars", from_db=n_db, from_exchange=n_ex)
 
     async def _clock_loop(self) -> None:
         while not self._stop.is_set():

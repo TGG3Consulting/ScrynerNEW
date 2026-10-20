@@ -17,7 +17,7 @@ from typing import Any
 
 import orjson
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import now, parse_ts
 
 from . import register
@@ -180,6 +180,17 @@ class MexcSpot(Collector):
             self.emit_ticker(inst, ts, volume_24h=f(t.get("quoteVolume")), price_change_24h_pct=f(t.get("priceChangePercent")) * 100.0,
                              last_price=f(t.get("lastPrice")), trades_24h=int(t.get("count") or 0) or None)
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        rows = await self.rest.get("/api/v3/klines", params={"symbol": inst.native_symbol, "interval": "1m", "limit": min(limit, 1000)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in rows:
+            ts = int(int(r[0]) // 1000)
+            if ts >= now_min:
+                continue
+            total = f(r[7])
+            out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("mexc_futures")
 class MexcFutures(Collector):
@@ -235,3 +246,17 @@ class MexcFutures(Collector):
                              high_24h=f(data.get("high24Price")), low_24h=f(data.get("lower24Price")))
             if data.get("holdVol") is not None:
                 self.emit_oi(inst, ts, f(data.get("holdVol")), None)
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        end = int(now())
+        d = await self.rest.get(f"/api/v1/contract/kline/{inst.native_symbol}", params={"interval": "Min1", "start": end - limit * 60, "end": end}, retries=1)
+        data = d.get("data") or {}
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for i, ts in enumerate(data.get("time", [])):
+            ts = int(ts)
+            if ts >= now_min:
+                continue
+            total = f(data["amount"][i])
+            out.append(Bar(ts=ts, o=f(data["open"][i]), h=f(data["high"][i]), l=f(data["low"][i]), c=f(data["close"][i]), total_quote=total, had_trade=total > 0))
+        return out

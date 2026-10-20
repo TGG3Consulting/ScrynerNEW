@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from scryner.core.models import Instrument
-from scryner.core.timeutil import parse_ts
+from scryner.core.models import Bar, Instrument
+from scryner.core.timeutil import now, parse_ts
 
 from . import register
 from .base import Collector, WsClient, chunks, f, levels
@@ -99,6 +99,20 @@ class _Bitget(Collector):
                 if t.get("openInterest") is not None and self.inst_type != "SPOT":
                     self.emit_oi(inst, ts, f(t.get("openInterest")), None)
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        if self.inst_type == "SPOT":
+            d = await self.rest.get("/api/v2/spot/market/candles", params={"symbol": inst.native_symbol, "granularity": "1min", "limit": min(limit, 1000)}, retries=1)
+        else:
+            d = await self.rest.get("/api/v2/mix/market/candles", params={"symbol": inst.native_symbol, "productType": self._inst_type_for(inst), "granularity": "1m", "limit": min(limit, 1000)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in d.get("data", []):
+            ts = int(int(r[0]) // 1000)
+            if ts >= now_min:
+                continue
+            total = f(r[6]) if len(r) > 6 else f(r[5]) * f(r[4])
+            out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("bitget_futures")
 class BitgetFutures(_Bitget):

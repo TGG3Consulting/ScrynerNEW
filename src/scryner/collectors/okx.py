@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from scryner.core.models import Instrument
+from scryner.core.models import Bar, Instrument
 from scryner.core.timeutil import parse_ts
 
 from . import register
@@ -98,6 +98,16 @@ class _Okx(Collector):
             return f(t.get("volCcy24h")) * f(t.get("last"))
         return f(t.get("volCcy24h"))
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        d = await self.rest.get("/api/v5/market/candles", params={"instId": inst.native_symbol, "bar": "1m", "limit": min(limit, 300)}, retries=1)
+        out: list[Bar] = []
+        for r in reversed(d.get("data", [])):
+            if str(r[8]) != "1":  # confirmed candles only
+                continue
+            ts = int(int(r[0]) // 1000)
+            total = f(r[7])  # volCcyQuote
+            out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("okx_futures")
 class OkxFutures(_Okx):

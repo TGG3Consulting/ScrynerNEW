@@ -60,6 +60,7 @@ metrics:
   recompute_sec: 1.0
   publish_sec: 4.0
   activity_lookback_windows: 60
+  backfill_minutes: 180   # минутные свечи с биржи при старте (NATR/spike сразу)
 
 ticks:
   threshold_power: 0.56

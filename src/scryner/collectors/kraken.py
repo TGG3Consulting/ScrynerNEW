@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from scryner.core.models import Instrument
-from scryner.core.timeutil import parse_ts
+from scryner.core.models import Bar, Instrument
+from scryner.core.timeutil import now, parse_ts
 
 from . import register
 from .base import Collector, WsClient, chunks, f
@@ -77,6 +77,17 @@ class KrakenFutures(Collector):
             if msg.get("openInterest") is not None:
                 self.emit_oi(inst, ts, f(msg.get("openInterest")), None)
 
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        d = await self.rest.get(f"/api/charts/v1/trade/{inst.native_symbol}/1m", params={"from": int(now()) - limit * 60, "to": int(now())}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in d.get("candles", []):
+            ts = int(int(r["time"]) // 1000)
+            if ts >= now_min:
+                continue
+            total = f(r.get("volume")) * f(r.get("close"))
+            out.append(Bar(ts=ts, o=f(r["open"]), h=f(r["high"]), l=f(r["low"]), c=f(r["close"]), total_quote=total, had_trade=total > 0))
+        return out
 
 @register("kraken_spot")
 class KrakenSpot(Collector):
@@ -125,3 +136,19 @@ class KrakenSpot(Collector):
             elif ch == "ticker":
                 self.emit_ticker(inst, parse_ts(None), volume_24h=f(row.get("volume")) * f(row.get("vwap")), price_change_24h_pct=f(row.get("change_pct")),
                                  last_price=f(row.get("last")), high_24h=f(row.get("high")), low_24h=f(row.get("low")))
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        d = await self.rest.get("/0/public/OHLC", params={"pair": inst.native_symbol.replace("/", ""), "interval": 1, "since": int(now()) - limit * 60}, retries=1)
+        res = d.get("result", {})
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for k, rows in res.items():
+            if k == "last":
+                continue
+            for r in rows:  # [time, o, h, l, c, vwap, volume, count]
+                ts = int(r[0])
+                if ts >= now_min:
+                    continue
+                total = f(r[6]) * f(r[5])
+                out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), total_quote=total, trades_count=int(r[7] or 0), had_trade=total > 0))
+        return out

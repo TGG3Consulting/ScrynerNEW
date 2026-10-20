@@ -1,0 +1,86 @@
+# Production layout: one worker per source, a gateway, feeds, Redis bus, TimescaleDB, nginx.
+# Start: docker compose up -d --build
+# Add sources by copying a worker block (SCRYNER_SOURCE) — ports match config/scryner.yaml.
+
+x-app: &app
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    SCRYNER_CONFIG: /app/config/scryner.yaml
+    SCRYNER_BUS__BACKEND: redis
+    SCRYNER_BUS__REDIS_URL: redis://redis:6379/0
+    SCRYNER_STORAGE__BACKEND: timescale
+    SCRYNER_STORAGE__TIMESCALE_DSN: postgresql://scryner:${POSTGRES_PASSWORD:-scryner}@timescale:5432/scryner
+    SCRYNER_APP__ENV: prod
+  volumes:
+    - ./config/scryner.yaml:/app/config/scryner.yaml:ro
+    - ./data:/app/data
+  depends_on:
+    redis: {condition: service_healthy}
+    timescale: {condition: service_healthy}
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "2gb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, timeout: 3s, retries: 20}
+    restart: unless-stopped
+
+  timescale:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: scryner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scryner}
+      POSTGRES_DB: scryner
+    volumes: ["timescale-data:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U scryner"], interval: 5s, timeout: 3s, retries: 30}
+    restart: unless-stopped
+
+  gateway:
+    <<: *app
+    command: ["gateway"]
+    expose: ["8080"]
+
+  feeds:
+    <<: *app
+    command: ["feeds"]
+
+  worker-binance-futures:   {<<: *app, command: ["worker", "binance_futures"]}
+  worker-binance-spot:      {<<: *app, command: ["worker", "binance_spot"]}
+  worker-binance-alpha:     {<<: *app, command: ["worker", "binance_alpha"]}
+  worker-bybit-futures:     {<<: *app, command: ["worker", "bybit_futures"]}
+  worker-bybit-spot:        {<<: *app, command: ["worker", "bybit_spot"]}
+  worker-okx-futures:       {<<: *app, command: ["worker", "okx_futures"]}
+  worker-okx-spot:          {<<: *app, command: ["worker", "okx_spot"]}
+  worker-bitget-futures:    {<<: *app, command: ["worker", "bitget_futures"]}
+  worker-bitget-spot:       {<<: *app, command: ["worker", "bitget_spot"]}
+  worker-gateio-futures:    {<<: *app, command: ["worker", "gateio_futures"]}
+  worker-gateio-spot:       {<<: *app, command: ["worker", "gateio_spot"]}
+  worker-mexc-futures:      {<<: *app, command: ["worker", "mexc_futures"]}
+  worker-mexc-spot:         {<<: *app, command: ["worker", "mexc_spot"]}
+  worker-kucoin-futures:    {<<: *app, command: ["worker", "kucoin_futures"]}
+  worker-kucoin-spot:       {<<: *app, command: ["worker", "kucoin_spot"]}
+  worker-htx-futures:       {<<: *app, command: ["worker", "htx_futures"]}
+  worker-kraken-futures:    {<<: *app, command: ["worker", "kraken_futures"]}
+  worker-kraken-spot:       {<<: *app, command: ["worker", "kraken_spot"]}
+  worker-coinbase-spot:     {<<: *app, command: ["worker", "coinbase_spot"]}
+  worker-upbit-spot:        {<<: *app, command: ["worker", "upbit_spot"]}
+  worker-hyperliquid-futures: {<<: *app, command: ["worker", "hyperliquid_futures"]}
+  worker-hyperliquid-spot:  {<<: *app, command: ["worker", "hyperliquid_spot"]}
+  worker-aster-futures:     {<<: *app, command: ["worker", "aster_futures"]}
+  worker-aster-spot:        {<<: *app, command: ["worker", "aster_spot"]}
+  worker-apex-futures:      {<<: *app, command: ["worker", "apex_futures"]}
+  worker-lighter-futures:   {<<: *app, command: ["worker", "lighter_futures"]}
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/certs:/etc/nginx/certs:ro
+    depends_on: [gateway]
+    restart: unless-stopped
+
+volumes:
+  timescale-data: {}
