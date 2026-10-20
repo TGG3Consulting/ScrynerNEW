@@ -1,6 +1,9 @@
 # BACKLOG
 
-Нумерация: `S<этап>-<номер>`. Статусы: `[ ]` не начато, `[~]` в работе, `[x]` готово.
+Нумерация: `S<поток>-<номер>`. Статусы: `[ ]` не начато, `[~]` в работе, `[x]` готово.
+
+> Решение оператора 2026-10-20: без MVP, без заглушек и моков, все биржи включая DEX.
+> «Этапы» ниже — параллельные потоки работ, а не очередность релизов.
 
 ## Этап 0 — Каркас
 - [ ] S0-01 Пакет `src/scryner` с точкой входа `python -m scryner` (asyncio.gather сервисов)
@@ -12,10 +15,10 @@
 - [ ] S0-07 CI (GitHub Actions): ruff, mypy, pytest
 - [ ] S0-08 Dockerfile + docker-compose (redis, timescaledb, api)
 
-## Этап 1 — MVP Binance Futures
-- [ ] S1-01 Каталог инструментов Binance Futures (exchangeInfo → key, tick_size, step_size, coi_base, stock_scope)
-- [ ] S1-02 Коллектор `aggTrade` (до 200 стримов/соединение, reconnect, контроль лага)
-- [ ] S1-03 Коллектор OI: REST `openInterest` раз в N сек по всем символам с rate-limit
+## Этап 1 — Агрегатор и метрики (ядро данных)
+- [ ] S1-01 Единый каталог инструментов (key, tick_size, step_size, multiplier, quote, coi_base, stock_scope, asset_class)
+- [ ] S1-02 Базовый класс коллектора: подписки пачками, reconnect, контроль лага, нормализация
+- [ ] S1-03 OI-поллеры с rate-limit на биржу
 - [ ] S1-04 Агрегатор 1s-баров (кольцо 30 мин) с buy/sell quote, trades_count, oi_close
 - [ ] S1-05 Агрегатор 1m-баров с OI OHLC, запись в БД, retention 9 дней
 - [ ] S1-06 Окна 5m/15m/1h/24h из 1m, метрики range/volume/oi_change/tpm/dvol/natr5/spike
@@ -23,14 +26,15 @@
 - [ ] S1-08 `GET /api/catalog` с `catalog_version` и дельтой
 - [ ] S1-09 `POST /api/history_batch` (1s/1m, limit, include_partial, до 64 ключей)
 - [ ] S1-10 `WS /ws/metrics` — дельты метрик раз в секунду
-- [ ] S1-11 Клиент: таблица TOP 50 (Биржа, Символ, TPM, Dvol%, L/S, OI5m%) с сортировкой и фильтром
-- [ ] S1-12 Сверка метрик с Binance UI на 10 инструментах (тест на расхождение ≤ 1%)
+- [ ] S1-11 tick_threshold по суточному объёму (clamp(0.274·vol^0.479, 100, 25000)), пересчёт раз в минуту
+- [ ] S1-12 Сверка метрик с UI бирж на 10 инструментах (тест на расхождение ≤ 1%)
+- [ ] S1-13 Кластеры 1h по шагу цены из потока сделок
 
 ## Этап 2 — Алерты
-- [ ] S2-01 Модель порогов пользователя по рынку (TPM, long, short, spike, dvol, natr5, oi5m, cooldown)
-- [ ] S2-02 Движок алертов: конъюнкция включённых условий, кулдаун на пару
-- [ ] S2-03 История алертов: хранение 7 дней, `GET /api/events`
-- [ ] S2-04 `WS /ws/events` — поток событий с heartbeat
+- [ ] S2-01 Клиентская модель порогов по рынку и паре (HARD_DEFAULT_PAIR_SETTINGS), AND/OR-логика evaluateAlertState, кулдаун
+- [ ] S2-02 Сервер: `/ws/all/alerts/v1` с min_* фильтрами и gzip-фреймами
+- [ ] S2-03 История алертов на клиенте (IndexedDB), экспорт
+- [ ] S2-04 Серверные лимиты chart-alerts (30 / 5 на ключ), `/api/chart-alerts/v1`
 - [ ] S2-05 Telegram-уведомления: свой бот-токен + chat_id, очередь до 8 событий / 2 с, TTL 60 с
 - [ ] S2-06 Клиент: виджет «История алертов», звук, форма порогов
 - [ ] S2-07 Лимиты алертов с графика: 30 активных / 5 на инструмент
@@ -46,13 +50,23 @@
 - [ ] S3-08 Клиент: Graph mode (`/api/candidates`), Tick mode (1s-графики)
 - [ ] S3-09 Автооткрытие стакана: HTTP на localhost терминала (MetaScalp :17845), ping статуса
 
-## Этап 4 — Мультибиржа и COI
-- [ ] S4-01 Абстракция коллектора + нормализация символов; `source_route_id`
-- [ ] S4-02 Bybit v5 (trades, orderbook, tickers OI)
-- [ ] S4-03 OKX, Bitget, Gate.io, MEXC
-- [ ] S4-04 COI по `coi_base`: дельты OI по окнам и число источников
-- [ ] S4-05 `route`: all_futures / all_spot / all_in_one / per-exchange
-- [ ] S4-06 Hyperliquid, Aster, Lighter, ApeX, KuCoin, HTX, Kraken, Coinbase, Upbit
+## Этап 4 — Коллекторы всех бирж
+- [ ] S4-01 Binance futures + spot + Alpha (aggTrade, depth, OI; живая проверка из RU/EU-региона)
+- [ ] S4-02 Bybit v5 futures + spot (publicTrade, orderbook, tickers OI)
+- [ ] S4-03 OKX futures + spot
+- [ ] S4-04 Bitget futures + spot
+- [ ] S4-05 Gate.io futures + spot
+- [ ] S4-06 MEXC futures + spot
+- [ ] S4-07 KuCoin futures + spot
+- [ ] S4-08 HTX futures
+- [ ] S4-09 Kraken futures + spot
+- [ ] S4-10 Coinbase spot, Upbit spot
+- [ ] S4-11 Hyperliquid perp + spot (DEX)
+- [ ] S4-12 Aster futures + spot (DEX)
+- [ ] S4-13 ApeX futures (DEX)
+- [ ] S4-14 Lighter futures (DEX)
+- [ ] S4-15 COI по `coi_base`: дельты OI по окнам и число источников
+- [ ] S4-16 `route`: all_futures / all_spots / all_stocks / all_in_one / all_ticks / per-source
 
 ## Этап 5 — Пользователи
 - [ ] S5-01 Telegram-логин: deep-link `start=login_<token>`, `/api/auth/pending/{token}`, cookie-сессия
