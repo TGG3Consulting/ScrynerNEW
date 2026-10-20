@@ -11,6 +11,14 @@ import { splitKey } from "./types";
 export type Timeframe = "1s" | "1m" | "5m" | "15m" | "1h";
 const TF_SEC: { [k in Timeframe]: number } = { "1s": 1, "1m": 60, "5m": 300, "15m": 900, "1h": 3600 };
 
+function fmtDuration(sec: number): string {
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 export interface ChartMarker {
   ts: number;
   kind: "bot" | "density" | "twap" | "alert" | "tick";
@@ -34,7 +42,9 @@ export class ChartPanel {
   private title: HTMLElement;
   private tfBar: HTMLElement;
   private container: HTMLElement;
-  private ruler = false;
+  private rulerBox: HTMLElement | null = null;
+  private rulerLabel: HTMLElement | null = null;
+  private rulerAnchor: { x: number; y: number; time: number; price: number } | null = null;
 
   constructor(public root: HTMLElement, opts: { onFavorite?: (key: string) => void } = {}) {
     root.classList.add("chart-panel");
@@ -63,13 +73,66 @@ export class ChartPanel {
     this.oi = this.chart.addSeries(LineSeries, { color: "#f5c542", lineWidth: 1, priceScaleId: "oi", lastValueVisible: true, priceLineVisible: false });
     this.chart.priceScale("oi").applyOptions({ scaleMargins: { top: 0.88, bottom: 0 } });
     root.addEventListener("keydown", (e) => {
-      if (e.key === "Shift") {
-        this.ruler = !this.ruler;
-        this.chart.applyOptions({ crosshair: { mode: this.ruler ? 1 : 0 } });
-      }
       if (e.shiftKey && e.key.toLowerCase() === "f" && this.key) opts.onFavorite?.(this.key);
     });
     root.tabIndex = 0;
+    this.setupRuler();
+  }
+
+  // Shift + движение мышью = линейка: прямоугольник замера + плашка (%, Δцена, объём, время, бары).
+  private setupRuler(): void {
+    this.container.style.position = "relative";
+    this.rulerBox = document.createElement("div");
+    this.rulerBox.className = "chart-ruler";
+    this.rulerLabel = document.createElement("div");
+    this.rulerLabel.className = "chart-ruler-label";
+    this.rulerBox.style.display = this.rulerLabel.style.display = "none";
+    this.container.append(this.rulerBox, this.rulerLabel);
+    this.container.addEventListener("mousemove", (e) => {
+      if (!e.shiftKey) return this.clearRuler();
+      const rect = this.container.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const price = this.candles.coordinateToPrice(y);
+      const time = this.chart.timeScale().coordinateToTime(x) as number | null;
+      if (price == null || time == null) return;
+      if (!this.rulerAnchor) {
+        this.rulerAnchor = { x, y, time, price };
+        return;
+      }
+      this.drawRuler(x, y, time, price);
+    });
+    this.container.addEventListener("mouseleave", () => this.clearRuler());
+  }
+
+  private clearRuler(): void {
+    this.rulerAnchor = null;
+    if (this.rulerBox) this.rulerBox.style.display = "none";
+    if (this.rulerLabel) this.rulerLabel.style.display = "none";
+  }
+
+  private drawRuler(x: number, y: number, time: number, price: number): void {
+    const a = this.rulerAnchor;
+    if (!a || !this.rulerBox || !this.rulerLabel) return;
+    const up = price >= a.price;
+    const pctChange = a.price ? ((price - a.price) / a.price) * 100 : 0;
+    const delta = price - a.price;
+    const tfSec = TF_SEC[this.timeframe];
+    const off = store.profile.prefs.utc_offset_min * 60;
+    const lo = Math.min(a.time, time);
+    const hi = Math.max(a.time, time);
+    const bars = Math.max(1, Math.round((hi - lo) / tfSec));
+    let vol = 0;
+    for (const b of this.aggregated()) {
+      const bt = b.ts + off;
+      if (bt >= lo && bt <= hi) vol += b.total_quote;
+    }
+    const col = up ? "#26a69a" : "#ef5350";
+    const left = Math.min(a.x, x);
+    const top = Math.min(a.y, y);
+    this.rulerBox.style.cssText = `display:block;position:absolute;left:${left}px;top:${top}px;width:${Math.abs(x - a.x)}px;height:${Math.abs(y - a.y)}px;background:${up ? "rgba(38,166,154,0.15)" : "rgba(239,83,80,0.15)"};border:1px solid ${col};pointer-events:none;z-index:10;`;
+    this.rulerLabel.textContent = `${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(2)}% d ${delta >= 0 ? "+" : ""}${Number(delta.toPrecision(5))} V ${shortNum(vol)} T ${fmtDuration(bars * tfSec)} ${bars} bars`;
+    this.rulerLabel.style.cssText = `display:block;position:absolute;left:${x + 10}px;top:${y + 10}px;background:${col};color:#06110f;font:600 10px/1.4 system-ui,sans-serif;padding:1px 6px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:11;`;
   }
 
   setTimeframe(tf: Timeframe): void {
