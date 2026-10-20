@@ -758,9 +758,14 @@ class Gateway:
         server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
         task = asyncio.create_task(server.serve())
         log.info("gateway_listening", host=self.cfg.api.host, port=self.cfg.api.port)
-        await stop.wait()
+        stop_task = asyncio.create_task(stop.wait())
+        done, _ = await asyncio.wait({task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+        if task in done and not stop.is_set():
+            await self.state.stop()
+            raise SystemExit(f"gateway stopped unexpectedly (port {self.cfg.api.port} busy?)")
         server.should_exit = True
         await task
+        stop_task.cancel()
         await self.state.stop()
 
 

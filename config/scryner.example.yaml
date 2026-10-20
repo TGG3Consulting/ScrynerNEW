@@ -107,7 +107,7 @@ twap:
   poll_sec: 2.0
   banned_tokens: [bnb, btc, eth, paxg]
   banned_prefixes: ["cash:", "vntl:", "xyz:"]
-  min_usd_per_minute_default: 10000
+  min_usd_per_minute_default: 0        # общего порога нет, только по токенам (как у референса)
 
 api:
   host: 0.0.0.0

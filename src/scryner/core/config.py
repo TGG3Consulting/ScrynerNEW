@@ -142,7 +142,7 @@ class TwapConfig(BaseModel):
     poll_sec: float = 2.0
     banned_tokens: list[str] = Field(default_factory=lambda: ["bnb", "btc", "eth", "paxg"])
     banned_prefixes: list[str] = Field(default_factory=lambda: ["cash:", "vntl:", "xyz:"])
-    min_usd_per_minute_default: float = 10_000.0
+    min_usd_per_minute_default: float = 0.0
     min_usd_per_minute_by_token: dict[str, float] = Field(default_factory=dict)
     min_usd_per_30s_by_token_side: dict[str, dict[str, float]] = Field(default_factory=dict)
 
