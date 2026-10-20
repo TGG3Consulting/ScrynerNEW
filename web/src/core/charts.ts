@@ -16,6 +16,7 @@ export interface ChartMarker {
   kind: "bot" | "density" | "twap" | "alert" | "tick";
   text: string;
   side?: "buy" | "sell";
+  key?: string; // stable identity (e.g. density wall id): repeats replace instead of stacking
 }
 
 export class ChartPanel {
@@ -132,6 +133,15 @@ export class ChartPanel {
     if (m.kind === "twap" && !enabled.twap) return;
     if (m.kind === "alert" && !enabled.alerts) return;
     if (m.kind === "tick" && !enabled.ticks) return;
+    if (m.key) {
+      // one marker per stable identity (density wall, bot signal): refresh, do not stack
+      const i = this.markers.findIndex((x) => x.key === m.key);
+      if (i >= 0) {
+        this.markers[i] = m;
+        this.render();
+        return;
+      }
+    }
     this.markers.push(m);
     if (this.markers.length > 200) this.markers.shift();
     this.render();

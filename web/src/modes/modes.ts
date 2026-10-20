@@ -69,19 +69,15 @@ export function advancedMode(root: HTMLElement, ctx: WidgetCtx): ModeHandle {
   if (prefs.infoblock.news) right.appendChild(feedWidget("news").root);
   if (prefs.infoblock.listings) right.appendChild(feedWidget("listings").root);
 
-  // chart markers from events
+  // chart markers from events (как у оригинала: боты, плотности LW и алерты; тики — только в ленте, без стрелок на свечах)
   const offs = [
-    data.onTick.on((tk) => {
-      const key = keyOf(tk);
-      for (const c of charts) if (c.key === key) c.addMarker({ ts: tk.timestamp, kind: "tick", text: `${shortNum(tk.buy + tk.sell)}`, side: tk.buy >= tk.sell ? "buy" : "sell" });
-    }),
     data.onDensity.on((d) => {
       const key = `${d.exchange}:${d.pair}:${d.market_type}`;
-      for (const c of charts) if (c.key === key) c.addMarker({ ts: d.captured_at, kind: "density", text: "LW", side: d.side === "bid" ? "buy" : "sell" });
+      for (const c of charts) if (c.key === key) c.addMarker({ ts: d.captured_at, kind: "density", text: "LW", side: d.side === "bid" ? "buy" : "sell", key: `d:${d.id}` });
     }),
     data.onBot.on((b) => {
       if (!b?.key) return;
-      for (const c of charts) if (c.key === b.key) c.addMarker({ ts: Date.parse(b.captured_at) / 1000, kind: "bot", text: `Bot ${b.pattern ?? ""} R${b.rating ?? 0}`, side: b.side as any });
+      for (const c of charts) if (c.key === b.key) c.addMarker({ ts: Date.parse(b.captured_at) / 1000, kind: "bot", text: `Bot ${b.pattern ?? ""} R${b.rating ?? 0}`, side: b.side as any, key: `b:${b.id ?? b.captured_at}` });
     }),
   ];
   ctx.alertEngine.listeners.push((a) => {
@@ -196,9 +192,8 @@ export function tickMode(root: HTMLElement, ctx: WidgetCtx): ModeHandle {
   side.appendChild(twapWidget(localCtx).root);
   const off = data.onTick.on((tk: Tick) => {
     const key = keyOf(tk);
-    const c = charts.get(key);
-    if (c) c.addMarker({ ts: tk.timestamp, kind: "tick", text: shortNum(tk.buy + tk.sell), side: tk.buy >= tk.sell ? "buy" : "sell" });
-    else if (charts.size < 4 && tk.buy + tk.sell >= tk.tick_threshold * 3) openChart(key);
+    // тики не рисуем стрелками на свечах (как у оригинала); только авто-открываем график на крупном тике
+    if (!charts.get(key) && charts.size < 4 && tk.buy + tk.sell >= tk.tick_threshold * 3) openChart(key);
   });
   return { destroy: () => {
     off();
