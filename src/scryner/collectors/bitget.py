@@ -96,8 +96,11 @@ class _Bitget(Collector):
                 self.emit_ticker(inst, ts, volume_24h=f(t.get("quoteVolume")), price_change_24h_pct=f(t.get("change24h")) * 100.0,
                                  last_price=f(t.get("lastPr")), fair_price=f(t.get("markPrice")) if t.get("markPrice") else None,
                                  high_24h=f(t.get("high24h")), low_24h=f(t.get("low24h")))
-                if t.get("openInterest") is not None and self.inst_type != "SPOT":
-                    self.emit_oi(inst, ts, f(t.get("openInterest")), None)
+                oi_raw = t.get("holdingAmount", t.get("openInterest"))  # bitget v2 futures field is holdingAmount (base coin)
+                if oi_raw is not None and self.inst_type != "SPOT":
+                    oi_base = f(oi_raw)
+                    mark = f(t.get("markPrice")) or f(t.get("lastPr"))
+                    self.emit_oi(inst, ts, oi_base, oi_base * mark if mark else None)
 
     async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
         if self.inst_type == "SPOT":

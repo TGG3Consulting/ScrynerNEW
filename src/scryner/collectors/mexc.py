@@ -94,27 +94,29 @@ class _MexcSpotProto:
         symbol = _s(top.get(WRAP_SYMBOL, [b""])[0])
         send_time = top.get(WRAP_SENDTIME, [0])[0]
         msg: dict[str, Any] = {"channel": channel, "symbol": symbol, "ts": parse_ts(send_time)}
-        if WRAP_AGGRE_DEALS in top:
-            # PublicAggreDealsV3Api: 1 deals(repeated: 1 price, 2 quantity, 3 tradeType(1 buy,2 sell), 4 time), 2 eventType
-            deals = []
-            for item in pb_dict(top[WRAP_AGGRE_DEALS][0]).get(1, []):  # type: ignore[arg-type]
-                d = pb_dict(item)  # type: ignore[arg-type]
-                deals.append({"p": _s(d.get(1, [b"0"])[0]), "q": _s(d.get(2, [b"0"])[0]), "side": int(d.get(3, [1])[0]), "t": d.get(4, [0])[0]})
-            msg["deals"] = deals
-        if WRAP_AGGRE_DEPTHS in top:
-            # PublicAggreDepthsV3Api: 1 asks(repeated: 1 price 2 quantity), 2 bids, 3 eventType, 4 fromVersion, 5 toVersion
-            d = pb_dict(top[WRAP_AGGRE_DEPTHS][0])  # type: ignore[arg-type]
-            msg["asks"] = [(_s(pb_dict(x).get(1, [b"0"])[0]), _s(pb_dict(x).get(2, [b"0"])[0])) for x in d.get(1, [])]  # type: ignore[arg-type]
-            msg["bids"] = [(_s(pb_dict(x).get(1, [b"0"])[0]), _s(pb_dict(x).get(2, [b"0"])[0])) for x in d.get(2, [])]  # type: ignore[arg-type]
-            msg["to_version"] = _s(d.get(5, [b"0"])[0])
-        if WRAP_MINI_TICKERS in top:
-            # PublicMiniTickersV3Api: 1 items(repeated MiniTicker: 1 symbol, 2 price, 3 rate, 4 zonedRate, 5 high, 6 low, 7 volume, 8 quantity, 9 lastCloseRate ...)
-            items = []
-            for x in pb_dict(top[WRAP_MINI_TICKERS][0]).get(1, []):  # type: ignore[arg-type]
-                d = pb_dict(x)  # type: ignore[arg-type]
-                items.append({"symbol": _s(d.get(1, [b""])[0]), "price": _s(d.get(2, [b"0"])[0]), "rate": _s(d.get(3, [b"0"])[0]),
-                              "high": _s(d.get(5, [b"0"])[0]), "low": _s(d.get(6, [b"0"])[0]), "volume": _s(d.get(7, [b"0"])[0])})
-            msg["tickers"] = items
+        # Dispatch by channel string: MEXC's wrapper field numbers vary by channel
+        # (aggre.deals=314, aggre.depth=313, limit.depth=303, miniTickers=309), so keying on
+        # the channel name is robust. The body is the single non-meta top-level field.
+        body_fields = [fno for fno in top if fno not in (WRAP_CHANNEL, WRAP_SYMBOL, WRAP_SENDTIME)]
+        if not body_fields:
+            return msg
+        body = pb_dict(top[body_fields[0]][0])  # type: ignore[arg-type]
+        cl = channel.lower()
+        if "deals" in cl:
+            # repeated deals: 1 price, 2 quantity, 3 tradeType(1 buy,2 sell), 4 time
+            msg["deals"] = [{"p": _s(d.get(1, [b"0"])[0]), "q": _s(d.get(2, [b"0"])[0]), "side": int(d.get(3, [1])[0]), "t": d.get(4, [0])[0]}
+                            for d in (pb_dict(x) for x in body.get(1, []))]  # type: ignore[arg-type]
+        elif "depth" in cl:
+            # 1 asks(1 price,2 qty), 2 bids; limit.depth is a full snapshot, increase/aggre is a diff
+            msg["asks"] = [(_s(pb_dict(x).get(1, [b"0"])[0]), _s(pb_dict(x).get(2, [b"0"])[0])) for x in body.get(1, [])]  # type: ignore[arg-type]
+            msg["bids"] = [(_s(pb_dict(x).get(1, [b"0"])[0]), _s(pb_dict(x).get(2, [b"0"])[0])) for x in body.get(2, [])]  # type: ignore[arg-type]
+            msg["to_version"] = _s(body.get(5, body.get(4, [b"0"]))[0])
+            msg["snapshot"] = "limit.depth" in cl
+        elif "ticker" in cl:
+            # repeated MiniTicker: 1 symbol, 2 price, 3 rate, 5 high, 6 low, 7 volume
+            msg["tickers"] = [{"symbol": _s(d.get(1, [b""])[0]), "price": _s(d.get(2, [b"0"])[0]), "rate": _s(d.get(3, [b"0"])[0]),
+                               "high": _s(d.get(5, [b"0"])[0]), "low": _s(d.get(6, [b"0"])[0]), "volume": _s(d.get(7, [b"0"])[0])}
+                              for d in (pb_dict(x) for x in body.get(1, []))]  # type: ignore[arg-type]
         return msg
 
 
@@ -133,11 +135,12 @@ class MexcSpot(Collector):
         return out
 
     async def open_streams(self, instruments: list[Instrument]) -> None:
-        per = min(self.cfg.streams_per_connection, 30)  # MEXC: max 30 subscriptions per connection
+        # MEXC: max 30 subscriptions per connection; deals + limit-depth = 2 per symbol
+        per = min(self.cfg.streams_per_connection, 15 if self.cfg.depth_enabled else 30)
         for i, batch in enumerate(chunks(instruments, per)):
             params = [f"spot@public.aggre.deals.v3.api.pb@100ms@{x.native_symbol}" for x in batch]
             if self.cfg.depth_enabled:
-                params += [f"spot@public.aggre.depth.v3.api.pb@100ms@{x.native_symbol}" for x in batch]
+                params += [f"spot@public.limit.depth.v3.api.pb@{x.native_symbol}@20" for x in batch]
 
             async def on_open(ws: WsClient, params: list[str] = params) -> None:
                 await ws.send_json({"method": "SUBSCRIPTION", "params": params})
@@ -161,7 +164,7 @@ class MexcSpot(Collector):
             inst = self.by_native.get(msg["symbol"])
             if inst is None:
                 return
-            self.emit_book(inst, msg["ts"], levels(msg.get("bids", [])), levels(msg.get("asks", [])), False, seq=int(f(msg.get("to_version"))))
+            self.emit_book(inst, msg["ts"], levels(msg.get("bids", [])), levels(msg.get("asks", [])), bool(msg.get("snapshot")), seq=int(f(msg.get("to_version"))))
         elif "tickers" in msg:
             for t in msg["tickers"]:
                 inst = self.by_native.get(t["symbol"])
