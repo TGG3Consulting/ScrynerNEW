@@ -103,8 +103,9 @@ event: id, ts, type ∈ {tick, wall, twap, bot, alert}, key, exchange, pair, mar
 
 - **Тик (tick):** серверный. Для каждого инструмента каждую секунду: если `buy + sell`
   за секунду `≥ tick_threshold`, публикуется событие с OHLC секунды, `price_move_pct`,
-  `price_range_pct`, порогом и `volume_24h`. `tick_threshold_base = clamp(0.274 ·
-  volume_24h^0.479, 100, 25000)` (HTX: min 50), пересчёт раз в минуту по суточному объёму.
+  `price_range_pct`, порогом и `volume_24h`. `tick_threshold_base = clamp(coef ·
+  volume_24h^0.56, 100, 25000)`, coef 3/35 futures, 1.8/35 spot, 1/35 Aster (HTX: min 50),
+  пересчёт раз в минуту по суточному объёму.
   Пользовательские фильтры (множитель, «всегда играть если», кастомные правила, баны) —
   на клиенте.
 - **Плотность (wall):** серверный, по локальной книге. Уровень с `size_usd ≥ min_size`
