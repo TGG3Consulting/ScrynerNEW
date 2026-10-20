@@ -182,7 +182,13 @@ export function densityWidget(ctx: WidgetCtx): WidgetFrame {
       if (prepend) list.prepend(c);
       else list.appendChild(c);
     }
-    const impact = Object.entries(d.impact ?? {}).sort((a, b) => Number(a[0]) - Number(b[0])).map(([w, i]) => `<div class="impact ${i.label}">${Number(w) / 60}m: ${i.label} ${pct(i.move_pct, 4)}</div>`).join("");
+    const wins = d.impact_windows?.length ? d.impact_windows : Object.keys(d.impact ?? {}).map(Number);
+    const impact = [...wins].sort((a, b) => a - b).map((w) => {
+      const i = (d.impact ?? {})[String(w)];
+      return i
+        ? `<div class="impact ${i.label}">${w / 60}m: ${i.label} ${pct(i.move_pct, 4)}</div>`
+        : `<div class="impact unknown">${w / 60}m: unknown</div>`;
+    }).join("");
     c.innerHTML = `<div class="card-head"><span class="card-title">${esc(d.exchange_label)}</span><span class="time">${hhmmss(d.captured_at)}</span></div><div class="card-sym">${esc(d.display_pair)}</div><div class="metric-line">${esc(d.metric_line)}${d.is_iceberg ? ' <span class="tag">iceberg</span>' : ""}${d.removed_at ? ' <span class="tag off">removed</span>' : ""}</div><div class="impact-box"><div class="impact-title">${t("impact")}</div>${impact}</div>`;
     c.querySelector(".card-head")!.appendChild(rowActions(key, d.exchange, d.pair, d.market_type, "density", ctx));
     c.querySelector(".card-sym")!.addEventListener("click", () => ctx.openChart(key));

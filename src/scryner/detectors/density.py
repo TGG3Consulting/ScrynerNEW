@@ -161,11 +161,13 @@ class DensityDetector:
         c.ref_price = self.last_price.get(key, c.price)
         self.active.append((key, c))
         emoji = "🟩" if c.side == "bid" else "🟥"
-        metric_line = f"{emoji} {short_number(notional)} @ {c.price:g} | {dist:.4f}%"
+        side_label = "LONG" if c.side == "bid" else "SHORT"
+        metric_line = f"{emoji} {short_number(notional)} @ {c.price:g} | {dist:.4f}% {side_label}"
         self.sink({
             "event": "density.message", "id": c.event_id, "key": key, "captured_at": now, "side": c.side, "price": c.price,
             "size_usd": round(notional, 4), "distance_pct": round(dist, 6), "is_iceberg": c.refills >= 2, "title": "",
             "metric_line": metric_line, "text": "", "source": "", "source_type": "density_alert", "impact": {},
+            "impact_windows": list(self.cfg.impact_windows_sec),  # окна для плейсхолдеров «5m/15m: unknown» на клиенте
         })
 
     def _impacts(self, now: float) -> None:
@@ -188,9 +190,15 @@ class DensityDetector:
 def density_text(payload: dict[str, Any]) -> str:
     """Render the card text exactly like the reference feed."""
     lines = [payload.get("exchange_label", ""), payload.get("display_pair", ""), payload.get("metric_line", ""), "| Price impact:"]
-    for w, info in sorted((payload.get("impact") or {}).items(), key=lambda kv: int(kv[0])):
-        mins = int(w) // 60
-        lines.append(f"| {mins}m: {info['label']} {info['move_pct']:+.4f}%")
+    impact = payload.get("impact") or {}
+    windows = payload.get("impact_windows") or [int(w) for w in impact]
+    for w in sorted(int(x) for x in windows):
+        mins = w // 60
+        info = impact.get(str(w))
+        if info:
+            lines.append(f"| {mins}m: {info['label']} {info['move_pct']:+.4f}%")
+        else:
+            lines.append(f"| {mins}m: unknown")
     return "\n".join(lines)
 
 

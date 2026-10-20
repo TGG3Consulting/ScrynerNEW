@@ -351,10 +351,14 @@ def render_density(p: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_bot(p: dict[str, Any]) -> dict[str, Any]:
+    import statistics
     from datetime import UTC, datetime
 
+    trades = p.get("trades") or []
+    size_usd = statistics.median([t["quote"] for t in trades]) if trades else 0.0
     return {"captured_at": datetime.fromtimestamp(p["captured_at"], tz=UTC).isoformat(), "text": bot_text(p), "id": p.get("id"), "key": p.get("key"),
-            "pattern": p.get("pattern"), "side": p.get("side"), "rating": p.get("rating"), "exchange": p.get("exchange"), "market_type": p.get("market_type")}
+            "pattern": p.get("pattern"), "side": p.get("side"), "rating": p.get("rating"), "exchange": p.get("exchange"), "market_type": p.get("market_type"),
+            "avg_interval_sec": p.get("avg_interval_sec"), "size_usd": round(size_usd, 2)}
 
 
 def render_feed(p: dict[str, Any]) -> dict[str, Any]:

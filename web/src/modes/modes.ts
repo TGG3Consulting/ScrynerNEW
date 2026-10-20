@@ -73,11 +73,15 @@ export function advancedMode(root: HTMLElement, ctx: WidgetCtx): ModeHandle {
   const offs = [
     data.onDensity.on((d) => {
       const key = `${d.exchange}:${d.pair}:${d.market_type}`;
-      for (const c of charts) if (c.key === key) c.addMarker({ ts: d.captured_at, kind: "density", text: "LW", side: d.side === "bid" ? "buy" : "sell", key: `d:${d.id}` });
+      const label = `${d.size_usd ? shortNum(d.size_usd) + " " : ""}LW`;
+      for (const c of charts) if (c.key === key) c.addMarker({ ts: d.captured_at, kind: "density", text: label, side: d.side === "bid" ? "buy" : "sell", key: `d:${d.id}` });
     }),
     data.onBot.on((b) => {
       if (!b?.key) return;
-      for (const c of charts) if (c.key === b.key) c.addMarker({ ts: Date.parse(b.captured_at) / 1000, kind: "bot", text: `Bot ${b.pattern ?? ""} R${b.rating ?? 0}`, side: b.side as any, key: `b:${b.id ?? b.captured_at}` });
+      const sz = b.size_usd ? `${shortNum(b.size_usd)} ` : "";
+      const iv = b.avg_interval_sec ? `${Math.round(b.avg_interval_sec)}s ` : "";
+      const label = `${sz}${iv}Bot ${b.pattern ?? ""} R${b.rating ?? 0}`.replace(/\s+/g, " ").trim();
+      for (const c of charts) if (c.key === b.key) c.addMarker({ ts: Date.parse(b.captured_at) / 1000, kind: "bot", text: label, side: b.side as any, key: `b:${b.id ?? b.captured_at}` });
     }),
   ];
   ctx.alertEngine.listeners.push((a) => {

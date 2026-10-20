@@ -110,6 +110,7 @@ export interface DensityItem {
   text: string;
   metric_line: string;
   impact?: { [window: string]: { label: string; move_pct: number } };
+  impact_windows?: number[];
   removed_at?: number | null;
 }
 
@@ -123,6 +124,8 @@ export interface BotItem {
   rating?: number;
   exchange?: string;
   market_type?: MarketType;
+  avg_interval_sec?: number;
+  size_usd?: number;
 }
 
 export interface TwapItem {
