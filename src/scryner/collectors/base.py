@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import os
 import random
+import socket
 import time
 import zlib
 from abc import ABC, abstractmethod
@@ -20,6 +22,12 @@ from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import Any, Protocol
 
 import aiohttp
+
+# In many Docker setups the container gets an IPv6 address but no IPv6 route, so connections
+# to hosts with AAAA records hang/fail while native apps (dual-stack) work. Forcing IPv4 fixes
+# the common "works natively, not in the container" symptom. Disable with SCRYNER_FORCE_IPV4=0.
+_FORCE_IPV4 = os.environ.get("SCRYNER_FORCE_IPV4", "1").lower() not in ("0", "false", "no", "")
+_SOCK_FAMILY = socket.AF_INET if _FORCE_IPV4 else socket.AF_UNSPEC
 import orjson
 import websockets
 
@@ -68,7 +76,8 @@ class RestClient:
     async def session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             # trust_env: honour HTTP(S)_PROXY / NO_PROXY and SSL_CERT_FILE from the environment
-            self._session = aiohttp.ClientSession(timeout=self._timeout, headers=self._headers, trust_env=True)
+            connector = aiohttp.TCPConnector(family=_SOCK_FAMILY, ttl_dns_cache=300)
+            self._session = aiohttp.ClientSession(timeout=self._timeout, headers=self._headers, trust_env=True, connector=connector)
         return self._session
 
     async def close(self) -> None:
@@ -185,7 +194,7 @@ class WsClient:
                 async with websockets.connect(
                     self.url, max_size=self.max_size, additional_headers=self.extra_headers,
                     ping_interval=self.ping_interval, ping_timeout=self.ping_interval * 2 if self.ping_interval else None,
-                    open_timeout=self.open_timeout, close_timeout=2, compression=None,
+                    open_timeout=self.open_timeout, close_timeout=2, compression=None, family=_SOCK_FAMILY,
                 ) as ws:
                     self._ws = ws
                     self.connected = True
