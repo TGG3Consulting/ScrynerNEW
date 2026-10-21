@@ -179,8 +179,9 @@ class DensityDetector:
                     continue
                 c.impact_done.add(w)
                 move = (price - c.ref_price) / c.ref_price * 100.0
-                # как у референса: «good» только при заметной реакции цены (по модулю), иначе «weak»
-                label = "good" if abs(move) >= self.cfg.impact_good_pct else "weak"
+                towards = move if c.side == "bid" else -move
+                # порог поднят до impact_good_pct (0.3): у референса +0.2% движения = «weak»
+                label = "good" if towards >= self.cfg.impact_good_pct else "weak"
                 self.sink({"event": "density.impact", "id": c.event_id, "key": key, "window_sec": w, "move_pct": round(move, 4), "label": label})
             if all(w in c.impact_done for w in self.cfg.impact_windows_sec) and now - c.published_at > max(self.cfg.impact_windows_sec) + 5:
                 self.active = [(k, x) for k, x in self.active if x is not c]
