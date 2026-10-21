@@ -106,7 +106,9 @@ class TickConfig(BaseModel):
 
 
 class DensityConfig(BaseModel):
-    min_size_usd_default: float = 100_000.0
+    # Calibrated to the reference density feed: walls from ~$40k, impact "good" only on a
+    # notable price reaction (observed +0.2% moves were labelled "weak").
+    min_size_usd_default: float = 40_000.0
     min_size_usd_by_exchange: dict[str, float] = Field(default_factory=dict)
     neighbour_levels: int = 10
     dominance_ratio: float = 5.0
@@ -114,7 +116,7 @@ class DensityConfig(BaseModel):
     max_distance_pct: float = 3.0
     iceberg_refill_ratio: float = 0.8
     impact_windows_sec: list[int] = Field(default_factory=lambda: [300, 900])
-    impact_good_pct: float = 0.05
+    impact_good_pct: float = 0.3
     cooldown_sec: float = 600.0
     history_size: int = 80
 

@@ -73,7 +73,7 @@ ticks:
   threshold_refresh_sec: 60
 
 density:
-  min_size_usd_default: 100000
+  min_size_usd_default: 40000       # как у референса: стенки от ~$40k
   min_size_usd_by_exchange: {}
   neighbour_levels: 10
   dominance_ratio: 5.0
@@ -81,7 +81,7 @@ density:
   max_distance_pct: 3.0
   iceberg_refill_ratio: 0.8
   impact_windows_sec: [300, 900]
-  impact_good_pct: 0.05
+  impact_good_pct: 0.3              # «good» только при заметной реакции цены (по модулю)
   cooldown_sec: 600
   history_size: 80
 

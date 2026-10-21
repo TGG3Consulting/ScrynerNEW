@@ -161,8 +161,7 @@ class DensityDetector:
         c.ref_price = self.last_price.get(key, c.price)
         self.active.append((key, c))
         emoji = "🟩" if c.side == "bid" else "🟥"
-        side_label = "LONG" if c.side == "bid" else "SHORT"
-        metric_line = f"{emoji} {short_number(notional)} @ {c.price:g} | {dist:.4f}% {side_label}"
+        metric_line = f"{emoji} {short_number(notional)} @ {c.price:g} | {dist:.4f}%"  # формат 1-в-1 как у референса (без LONG/SHORT)
         self.sink({
             "event": "density.message", "id": c.event_id, "key": key, "captured_at": now, "side": c.side, "price": c.price,
             "size_usd": round(notional, 4), "distance_pct": round(dist, 6), "is_iceberg": c.refills >= 2, "title": "",
@@ -180,8 +179,8 @@ class DensityDetector:
                     continue
                 c.impact_done.add(w)
                 move = (price - c.ref_price) / c.ref_price * 100.0
-                towards = move if c.side == "bid" else -move
-                label = "good" if towards >= self.cfg.impact_good_pct else "weak"
+                # как у референса: «good» только при заметной реакции цены (по модулю), иначе «weak»
+                label = "good" if abs(move) >= self.cfg.impact_good_pct else "weak"
                 self.sink({"event": "density.impact", "id": c.event_id, "key": key, "window_sec": w, "move_pct": round(move, 4), "label": label})
             if all(w in c.impact_done for w in self.cfg.impact_windows_sec) and now - c.published_at > max(self.cfg.impact_windows_sec) + 5:
                 self.active = [(k, x) for k, x in self.active if x is not c]
