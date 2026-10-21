@@ -76,6 +76,15 @@ class Gateway:
         self.auth = AuthService(storage, cfg.api, trial_days=cfg.api.trial_days, admin_telegram_ids=tuple(cfg.api.admin_telegram_ids))
         self.app = FastAPI(title="Scryner", docs_url=None, redoc_url=None, openapi_url=None)
         self.app.add_middleware(GZipMiddleware, minimum_size=512)
+
+        @self.app.middleware("http")
+        async def _no_cache_static(request: Request, call_next: Any) -> Response:  # type: ignore[misc]
+            # the client bundle lives at a fixed path (/static/app.js); force revalidation so a
+            # rebuilt bundle is never served stale from the browser cache
+            resp = await call_next(request)
+            if request.url.path.startswith("/static/"):
+                resp.headers["cache-control"] = "no-cache, must-revalidate"
+            return resp
         self.chart_subs: dict[int, set[str]] = {}
         self.stock_subs: dict[int, set[str]] = {}
         self.feed_clients: dict[str, int] = {}
