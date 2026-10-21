@@ -1,7 +1,7 @@
 // Data layer: all WebSocket channels for the current route, state maps and event emitters.
 
 import { ReconnectingWs, PatchState } from "./ws";
-import { store } from "./store";
+import { store, FUTURES_SOURCES, SPOT_SOURCES } from "./store";
 import type { AlertRecord, BotItem, DensityItem, FeedMessage, Record, Tick, TwapItem } from "./types";
 
 type Handler<T> = (x: T) => void;
@@ -48,8 +48,13 @@ export class DataLayer {
   topLimit = 50;
 
   private sourceQuery(): string {
+    // Always request ALL known sources (union with the full lists) so a stale/limited saved
+    // profile can never hide connected exchanges from TOP / ticks / alerts. Densities and bots
+    // already ignore this filter — this makes the rest consistent with them.
     const p = store.profile.prefs;
-    return `source_futures=${encodeURIComponent(p.sources_futures.join(","))}&source_spot=${encodeURIComponent(p.sources_spot.join(","))}`;
+    const fut = [...new Set([...FUTURES_SOURCES, ...(p.sources_futures ?? [])])];
+    const spot = [...new Set([...SPOT_SOURCES, ...(p.sources_spot ?? [])])];
+    return `source_futures=${encodeURIComponent(fut.join(","))}&source_spot=${encodeURIComponent(spot.join(","))}`;
   }
 
   private scope(): string {
