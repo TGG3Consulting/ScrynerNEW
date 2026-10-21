@@ -122,7 +122,8 @@ export const FUTURES_SOURCES = ["apex", "aster", "binance", "bitget", "bybit", "
 export const SPOT_SOURCES = ["aster", "binance", "binance_alpha", "bitget", "bybit", "coinbase", "gateio", "hyperliquid", "kraken", "kucoin", "mexc", "okx", "upbit"];
 
 export const DEFAULT_COLUMNS: { [c: string]: boolean } = {
-  exchange: true, pinned: true, pair: true, volume24h: false, tpm: true, spike: false, dvol: true, natr5: false, lsSum: true, buySum: false, sellSum: false,
+  // defaults matched to the reference (column_visible::all_futures)
+  exchange: true, pinned: true, pair: true, volume24h: false, tpm: true, spike: false, dvol: true, natr5: false, lsSum: true, buySum: true, sellSum: true,
   oi: true, oi2: false, oi_vol: false, price: false, priceChange: false, settings: true,
 };
 
@@ -132,7 +133,7 @@ function defaultProfile(): Profile {
     prefs: {
       alert_cooldown_minutes: 15, market_route: "all_futures", sources_futures: [...FUTURES_SOURCES], sources_spot: [...SPOT_SOURCES],
       grid: { cols: 5, rows: 2 }, columns: { ...DEFAULT_COLUMNS }, font_scale: 100, utc_offset_min: 0, sound_volume: 0.6, theme: "dark",
-      infoblock: { news: true, onchain: true, listings: true }, markers: { bots: true, density: true, twap: true, alerts: true, ticks: true, oi: true, volume: true, clusters: false },
+      infoblock: { news: true, onchain: true, listings: true }, markers: { bots: true, density: true, twap: true, alerts: true, ticks: true, oi: true, volume: true, clusters: true },
       layout: ["alerts", "ticks", "bots", "density", "twap"], chart_timeframe: "1m",
     },
     pairs: {},
