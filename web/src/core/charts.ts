@@ -80,6 +80,8 @@ export class ChartPanel {
   }
 
   // Shift + движение мышью = линейка: прямоугольник замера + плашка (%, Δцена, объём, время, бары).
+  // Используем нативный crosshairMove Lightweight Charts (всегда срабатывает над графиком) и
+  // глобальное отслеживание Shift (не зависит от фокуса панели).
   private setupRuler(): void {
     this.container.style.position = "relative";
     this.rulerBox = document.createElement("div");
@@ -88,21 +90,29 @@ export class ChartPanel {
     this.rulerLabel.className = "chart-ruler-label";
     this.rulerBox.style.display = this.rulerLabel.style.display = "none";
     this.container.append(this.rulerBox, this.rulerLabel);
-    this.container.addEventListener("mousemove", (e) => {
-      if (!e.shiftKey) return this.clearRuler();
-      const rect = this.container.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+    let shift = false;
+    const onKey = (e: KeyboardEvent): void => {
+      shift = e.shiftKey;
+      if (!shift) this.clearRuler();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    this.chart.subscribeCrosshairMove((param) => {
+      if (!shift || !param.point || param.time == null) {
+        if (!shift) this.clearRuler();
+        return;
+      }
+      const x = param.point.x;
+      const y = param.point.y;
       const price = this.candles.coordinateToPrice(y);
-      const time = this.chart.timeScale().coordinateToTime(x) as number | null;
-      if (price == null || time == null) return;
+      if (price == null) return;
+      const time = Number(param.time);
       if (!this.rulerAnchor) {
         this.rulerAnchor = { x, y, time, price };
         return;
       }
       this.drawRuler(x, y, time, price);
     });
-    this.container.addEventListener("mouseleave", () => this.clearRuler());
   }
 
   private clearRuler(): void {

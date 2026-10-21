@@ -1,6 +1,7 @@
 // Settings store: localStorage + server sync (user settings per route), with change events.
 
 import { apiGet, apiPut } from "./api";
+import { splitKey } from "./types";
 
 export interface PairSettings {
   buy_threshold: number;
@@ -26,6 +27,33 @@ export const HARD_DEFAULT_PAIR_SETTINGS: PairSettings = {
   buy_threshold: 0, sell_threshold: 0, oi_threshold: 0, tpm_threshold: 0, spike_threshold: 0, dvol_threshold: 0, natr5_threshold: 0,
   alert_cooldown_minutes: 0, pinned: false, hidden: false, hidden_until: 0,
   require_buy_or_sell: false, require_oi1: false, require_tpm: false, require_spike: false, require_dvol: false, require_natr5: false,
+};
+
+// Out-of-the-box alert thresholds per source route — reverse-engineered from the reference
+// service's own defaults (defaultPairSettings_v1). Alerts resolve by the PAIR's exchange route
+// (see pairSettings), so these make alerts fire immediately, exactly like the original.
+export const DEFAULT_ROUTE_SETTINGS: { [route: string]: Partial<PairSettings> } = {
+  aster_futures: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  aster_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  binance_alpha: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  binance_futures: { buy_threshold: 200000, sell_threshold: 200000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_oi1: true, require_dvol: true },
+  binance_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  bitget_futures: { buy_threshold: 50000, sell_threshold: 50000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  bitget_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  bybit_futures: { buy_threshold: 50000, sell_threshold: 50000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_oi1: true, require_dvol: true },
+  bybit_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  gateio_futures: { buy_threshold: 50000, sell_threshold: 50000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  gateio_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  hyperliquid_futures: { buy_threshold: 100000, sell_threshold: 100000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  kraken_futures: { buy_threshold: 50000, sell_threshold: 50000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  kraken_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  kucoin_futures: { buy_threshold: 50000, sell_threshold: 50000, oi_threshold: 5, dvol_threshold: 5, require_buy_or_sell: true, require_oi1: true, require_dvol: true },
+  kucoin_spot: { buy_threshold: 50000, sell_threshold: 50000, natr5_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  lighter_futures: { buy_threshold: 50000, sell_threshold: 50000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_oi1: true, require_dvol: true },
+  mexc_futures: { buy_threshold: 200000, sell_threshold: 200000, oi_threshold: 2, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  mexc_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  okx_futures: { buy_threshold: 100000, sell_threshold: 100000, oi_threshold: 5, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
+  okx_spot: { buy_threshold: 50000, sell_threshold: 50000, dvol_threshold: 6, require_buy_or_sell: true, require_dvol: true },
 };
 
 export interface TelegramSettings {
@@ -108,7 +136,7 @@ function defaultProfile(): Profile {
       layout: ["alerts", "ticks", "bots", "density", "twap"], chart_timeframe: "1m",
     },
     pairs: {},
-    route_defaults: {},
+    route_defaults: { ...DEFAULT_ROUTE_SETTINGS },
     telegram: { bot_token: "", chat_id: "", note: "", sources: { alerts: true, bots: false, density: false, twap: false, ticks: false, team: false },
       mobile: { alerts: false, bots: false, density: false, twap: false, ticks: false, team: false, charts: false }, auto_open_meta: false },
     ticks: { multiplier: 1, always_play_volume: 0, always_play_volatility: 0, sound: "bum", volume: 0.6, tts: false, exchanges: exAll(), custom: [] },
@@ -189,8 +217,18 @@ class Store {
   }
 
   pairSettings(key: string, route?: string): PairSettings {
-    const r = route ?? this.profile.prefs.market_route;
-    return { ...HARD_DEFAULT_PAIR_SETTINGS, ...(this.profile.route_defaults[r] ?? {}), ...(this.profile.pairs[key] ?? {}) };
+    if (route) return { ...HARD_DEFAULT_PAIR_SETTINGS, ...(this.profile.route_defaults[route] ?? {}), ...(this.profile.pairs[key] ?? {}) };
+    // Resolve by the pair's own exchange route (e.g. binance_futures), like the reference's
+    // profileRouteIdForKey, with the viewed market route as a lower-priority baseline.
+    const { exchange, market_type } = splitKey(key);
+    const exRoute = `${exchange}_${market_type}`;
+    const mr = this.profile.prefs.market_route;
+    return {
+      ...HARD_DEFAULT_PAIR_SETTINGS,
+      ...(this.profile.route_defaults[mr] ?? {}),
+      ...(this.profile.route_defaults[exRoute] ?? {}),
+      ...(this.profile.pairs[key] ?? {}),
+    };
   }
 
   isBanned(section: string, key: string): boolean {

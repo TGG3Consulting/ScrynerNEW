@@ -8,7 +8,12 @@ import type { Record } from "../core/types";
 import { button, checkbox, el, esc, field, modal, numInput, toast, toggle } from "./common";
 import { COLUMNS } from "./top";
 
-const ROUTES: Array<[string, string]> = [["all_futures", "All Futures"], ["all_spots", "All Spot"], ["all_stocks", "All Stocks"], ["all_in_one", "All in one"]];
+const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+const ROUTES: Array<[string, string]> = [
+  ["all_futures", "All Futures"], ["all_spots", "All Spot"], ["all_stocks", "All Stocks"], ["all_in_one", "All in one"],
+  ...FUTURES_SOURCES.map((e) => [`${e}_futures`, `${cap(e)} Futures`] as [string, string]),
+  ...SPOT_SOURCES.map((e) => [`${e}_spot`, `${cap(e)} Spot`] as [string, string]),
+];
 
 function badge(text: string, cls = "affect"): string {
   return `<span class="affect-badge ${cls}">${esc(text)}</span>`;
