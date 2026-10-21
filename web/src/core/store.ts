@@ -139,7 +139,7 @@ function defaultProfile(): Profile {
     pairs: {},
     route_defaults: { ...DEFAULT_ROUTE_SETTINGS },
     telegram: { bot_token: "", chat_id: "", note: "", sources: { alerts: true, bots: false, density: false, twap: false, ticks: false, team: false },
-      mobile: { alerts: false, bots: false, density: false, twap: false, ticks: false, team: false, charts: false }, auto_open_meta: false },
+      mobile: { alerts: false, bots: false, density: false, twap: false, ticks: false, team: false, charts: false }, auto_open_meta: true },
     ticks: { multiplier: 1, always_play_volume: 0, always_play_volatility: 0, sound: "bum", volume: 0.6, tts: false, exchanges: exAll(), custom: [] },
     bots: { patterns: { P1: true, C1: true, S1: true }, min_tick_volume: 0, min_tick_move: 0, hide_r0: false, exchanges: exAll() },
     density: { exchanges: Object.fromEntries(ALL_EXCHANGES.map((e) => [e, { enabled: true, min_usd: 0 }])) },

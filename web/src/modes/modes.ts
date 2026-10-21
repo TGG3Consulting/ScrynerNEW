@@ -85,6 +85,8 @@ export function advancedMode(root: HTMLElement, ctx: WidgetCtx): ModeHandle {
     }),
   ];
   ctx.alertEngine.listeners.push((a) => {
+    // auto-open the alerted pair into a chart slot (like the reference autoMeta), if enabled
+    if (store.profile.telegram.auto_open_meta && !charts.some((c) => c.key === a.key)) openChart(a.key);
     for (const c of charts) if (c.key === a.key) c.addMarker({ ts: a.timestamp / 1000, kind: "alert", text: a.reasons.map((r) => r.label).join(",") });
   });
   // initial charts: first pinned/top keys

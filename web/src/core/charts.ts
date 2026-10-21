@@ -60,7 +60,7 @@ export class ChartPanel {
       this.tfBar.appendChild(b);
     }
     this.chart = createChart(this.container, {
-      layout: { background: { color: "#101214" }, textColor: "#9aa3ad", fontSize: 10 },
+      layout: { background: { color: "#101214" }, textColor: "#9aa3ad", fontSize: 10, attributionLogo: false },
       grid: { vertLines: { color: "#1a1d21" }, horzLines: { color: "#1a1d21" } },
       rightPriceScale: { borderColor: "#262a2f", scaleMargins: { top: 0.05, bottom: 0.3 } },
       timeScale: { borderColor: "#262a2f", timeVisible: true, secondsVisible: false },
