@@ -13,6 +13,7 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install --upgrade pip && pip install -e . && pip install telethon cryptography
 COPY config/scryner.example.yaml ./config/scryner.example.yaml
+COPY tools ./tools
 COPY --from=web /web/dist ./web/dist
 RUN useradd -m scryner && mkdir -p /app/data && chown -R scryner /app
 USER scryner
