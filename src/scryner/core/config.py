@@ -120,13 +120,16 @@ class DensityConfig(BaseModel):
 
 
 class BotConfig(BaseModel):
-    min_series: int = 5
-    max_gap_sec: float = 30.0
-    p1_interval_tolerance: float = 0.25
-    p1_size_tolerance: float = 0.15
+    # Calibrated to the reference service's live bot feed (observed P1/C1 output):
+    # series as short as 3, intervals up to ~60s, ~30% size spread, loose timing.
+    min_series: int = 3
+    max_gap_sec: float = 60.0
+    p1_interval_tolerance: float = 0.5
+    p1_size_tolerance: float = 0.3
     c1_window_sec: float = 300.0
     c1_min_trades: int = 8
-    c1_min_side_share: float = 0.75
+    c1_min_side_share: float = 0.8
+    c1_require_direction: bool = False  # reference flags C1 even when price moves against the dominant side
     s1_min_pairs: int = 4
     s1_size_tolerance: float = 0.1
     min_tick_volume_usd: float = 50.0

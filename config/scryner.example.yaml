@@ -86,13 +86,14 @@ density:
   history_size: 80
 
 bots:
-  min_series: 5
-  max_gap_sec: 30
-  p1_interval_tolerance: 0.25
-  p1_size_tolerance: 0.15
+  min_series: 3                 # как у референса: серии от 3 сделок
+  max_gap_sec: 60               # интервалы P1 до ~60с
+  p1_interval_tolerance: 0.5    # допуск по нерегулярности интервалов
+  p1_size_tolerance: 0.3        # допуск по разбросу размера (~30%)
   c1_window_sec: 300
   c1_min_trades: 8
-  c1_min_side_share: 0.75
+  c1_min_side_share: 0.8
+  c1_require_direction: false   # C1 флагается даже при цене против доминирующей стороны (как у референса)
   s1_min_pairs: 4
   s1_size_tolerance: 0.1
   min_tick_volume_usd: 50

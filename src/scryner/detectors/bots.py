@@ -64,10 +64,9 @@ class BotDetector:
             self._s1(key, q, now)
 
     # ------------------------------------------------------------------ helpers
-    @staticmethod
-    def _rating(n: int, regularity: float) -> int:
-        # regularity: 0 (noisy) … 1 (perfect); n: series length
-        score = min(1.0, (n - 4) / 12) * 0.6 + regularity * 0.4
+    def _rating(self, n: int, regularity: float) -> int:
+        # regularity: 0 (noisy) … 1 (perfect); n: series length (from min_series up)
+        score = min(1.0, (n - self.cfg.min_series) / 9) * 0.5 + regularity * 0.5
         return max(0, min(5, round(score * 5)))
 
     def _emit(self, key: str, pattern: str, side: str, trades: list[Trade], rating: int, avg_interval: float, now: float,
@@ -136,7 +135,7 @@ class BotDetector:
         pressure = (last - first) / first * 100.0 if first else 0.0
         if abs(pressure) < self.cfg.min_tick_move_pct:
             return
-        if (side == "buy" and pressure <= 0) or (side == "sell" and pressure >= 0):
+        if self.cfg.c1_require_direction and ((side == "buy" and pressure <= 0) or (side == "sell" and pressure >= 0)):
             return
         gaps = [b.ts - a.ts for a, b in itertools.pairwise(same)]
         gmed = statistics.median(gaps) if gaps else 0.0
