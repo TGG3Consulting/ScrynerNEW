@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+### Fixed
+- **[COLLECTOR]** Устранено переполнение задач в BinanceAlpha: trade_poll_sec увеличен с 2.0 до 12.0,
+  добавлена защита от одновременного выполнения polling loops (_trade_polling flag).
+- **[COLLECTOR]** Снижена нагрузка на диск BinanceAlpha ticker запросами: klines limit уменьшен с 1440 до 120 (12x).
+- **[COLLECTOR]** Добавлена сортировка BinanceAlpha токенов по дате листинга (новые первыми) для max_instruments,
+  чтобы ограничение отсекало старые/неактивные токены.
+- **[COLLECTOR]** Добавлена overflow-защита в базовые _ticker_loop и _oi_loop всех коллекторов: polling flags
+  предотвращают накопление задач при медленном выполнении.
+- **[COLLECTOR]** Добавлены метрики мониторинга в collector_stats: ticker_poll_sec, oi_poll_sec (длительность),
+  ticker_skipped, oi_skipped (счётчики пропусков) для диагностики проблем производительности.
+
+### Changed
+- **[COLLECTOR]** BinanceAlpha: ticker_poll_sec увеличен до 180 секунд (с 60), max_instruments ограничен 50 токенами.
+
 ### Added
 - **[WEB]** Веб-клиент: режимы Advanced/Simple/Graph/Tick/Favorites, кабинет, меню настроек,
   клиентские алерты (порт evaluateAlertState), Telegram-очередь, звук/TTS, терминальные мосты.

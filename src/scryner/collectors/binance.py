@@ -216,7 +216,10 @@ class BinanceAlpha(Collector):
     * agg trades: ``/bapi/defi/v1/public/alpha-trade/agg-trades?symbol=<alphaId>USDT&limit=…``
     * 24h ticker: ``/bapi/defi/v1/public/alpha-trade/ticker/24hr?symbol=…``
     Alpha has no public WebSocket trade feed, so trades are polled per symbol every
-    ``extra.trade_poll_sec`` (default 2 s) with incremental ``fromId``.
+    ``extra.trade_poll_sec`` (default 12 s) with incremental ``fromId``.
+
+    TODO: Investigate if Binance Alpha has undocumented WS API or if regular Binance WS
+    supports alpha tokens. WebSocket would be more efficient than REST polling.
     """
 
     rest_rate_per_sec = 20.0
@@ -224,15 +227,15 @@ class BinanceAlpha(Collector):
     def __init__(self, cfg: Any, sink: Any) -> None:
         super().__init__(cfg, sink)
         self._last_trade_id: dict[str, int] = {}
+        self._trade_polling = False
 
     async def fetch_instruments(self) -> list[Instrument]:
         data = await self.rest.get("/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list")
         out: list[Instrument] = []
         for t in data.get("data", []) or []:
-            if not t.get("listingCex", True) and not t.get("onlineTge", False):
-                pass
             alpha_id = t.get("alphaId") or ""
             symbol = t.get("symbol") or ""
+            # Skip only offline tokens; let trade polling determine which are active
             if not alpha_id or not symbol or t.get("offline"):
                 continue
             native = f"{alpha_id}USDT"
@@ -243,6 +246,8 @@ class BinanceAlpha(Collector):
                 contract_address=t.get("contractAddress"), base_asset_id=alpha_id,
                 listed_at=parse_ts(t.get("listingTime")) if t.get("listingTime") else None,
             ))
+        # Sort by listing time (newest first) so max_instruments limit picks most recent/active tokens
+        out.sort(key=lambda i: i.listed_at or 0.0, reverse=True)
         return out
 
     async def open_streams(self, instruments: list[Instrument]) -> None:
@@ -273,21 +278,56 @@ class BinanceAlpha(Collector):
                     self._last_trade_id[inst.native_symbol] = int(rows[-1].get("a", 0))
 
         while not self._stop.is_set():
+            if self._trade_polling:
+                self.log.warning("trade_poll_skipped", reason="previous poll still running")
+                await asyncio.sleep(interval)
+                continue
+            self._trade_polling = True
             started = now()
-            await asyncio.gather(*(one(i) for i in list(self.instruments.values())))
-            await asyncio.sleep(max(0.2, interval - (now() - started)))
+            try:
+                await asyncio.gather(*(one(i) for i in list(self.instruments.values())))
+            finally:
+                self._trade_polling = False
+            elapsed = now() - started
+            await asyncio.sleep(max(0.2, interval - elapsed))
 
     async def poll_tickers(self, instruments: list[Instrument]) -> None:
+        """Derive ticker data from klines since ticker endpoint returns 404 for most tokens."""
         sem = asyncio.Semaphore(8)
 
         async def one(inst: Instrument) -> None:
             async with sem:
                 try:
-                    d = await self.rest.get("/bapi/defi/v1/public/alpha-trade/ticker/24hr", params={"symbol": inst.native_symbol}, retries=0)
+                    # Get last 120 1-minute klines to compute 2h volume (reduce load vs 24h/1440)
+                    d = await self.rest.get("/bapi/defi/v1/public/alpha-trade/klines",
+                                            params={"symbol": inst.native_symbol, "interval": "1m", "limit": 120}, retries=0)
                 except Exception:
                     return
-                t = d.get("data") or {}
-                self.emit_ticker(inst, now(), volume_24h=f(t.get("quoteVolume")), price_change_24h_pct=f(t.get("priceChangePercent")),
-                                 last_price=f(t.get("lastPrice")), trades_24h=int(t.get("count", 0) or 0))
+                rows = d.get("data") or []
+                if not rows:
+                    return
+                # Klines: [time, open, high, low, close, volume, closeTime, quoteVolume, trades, ...]
+                total_volume = sum(f(r[7]) for r in rows if len(r) > 7)
+                total_trades = sum(int(r[8] or 0) for r in rows if len(r) > 8)
+                last_price = f(rows[-1][4]) if rows else None
+                first_price = f(rows[0][1]) if rows else None
+                change_pct = ((last_price - first_price) / first_price * 100.0) if first_price and last_price else None
+                # Note: volume/trades are 2h actuals (not 24h) to reduce API load; frequent polling compensates
+                self.emit_ticker(inst, now(), volume_24h=total_volume, price_change_24h_pct=change_pct,
+                                 last_price=last_price, trades_24h=total_trades)
 
         await asyncio.gather(*(one(i) for i in instruments))
+
+    async def fetch_klines_1m(self, inst: Instrument, limit: int) -> list[Bar]:
+        rows = await self.rest.get("/bapi/defi/v1/public/alpha-trade/klines",
+                                   params={"symbol": inst.native_symbol, "interval": "1m", "limit": min(limit, 500)}, retries=1)
+        out: list[Bar] = []
+        now_min = int(now() // 60) * 60
+        for r in rows.get("data") or []:
+            ts = int(int(r[0]) // 1000)
+            if ts >= now_min:
+                continue
+            total = f(r[7])  # quoteVolume
+            out.append(Bar(ts=ts, o=f(r[1]), h=f(r[2]), l=f(r[3]), c=f(r[4]), buy_quote=0.0, sell_quote=0.0, total_quote=total,
+                           trades_count=int(r[8] or 0), had_trade=int(r[8] or 0) > 0))
+        return out

@@ -1,7 +1,8 @@
 """Entry point.
 
     python -m scryner all                 # every enabled source + gateway in one process (memory bus)
-    python -m scryner worker <source>     # one source worker (redis bus)
+                                          # WARNING: All sources share CPU/memory. For production use worker mode.
+    python -m scryner worker <source>     # one source worker (redis bus) - production mode with isolation
     python -m scryner gateway             # API gateway (redis bus)
     python -m scryner feeds               # Telegram channels / TWAP / stock reference feeds
 """

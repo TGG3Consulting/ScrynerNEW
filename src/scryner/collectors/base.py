@@ -273,6 +273,12 @@ class Collector(ABC):
         self._ws_clients: list[WsClient] = []
         self._stop = asyncio.Event()
         self.stats: dict[str, int] = {"trades": 0, "books": 0, "oi": 0, "tickers": 0}
+        self._ticker_polling = False
+        self._oi_polling = False
+        self._ticker_poll_skipped = 0
+        self._oi_poll_skipped = 0
+        self._ticker_poll_duration_sec = 0.0
+        self._oi_poll_duration_sec = 0.0
 
     # -------------------------------------------------------------- abstract API
     @abstractmethod
@@ -400,18 +406,38 @@ class Collector(ABC):
         if self.cfg.market_type != "futures":
             return
         while not self._stop.is_set():
+            if self._oi_polling:
+                self._oi_poll_skipped += 1
+                self.log.warning("oi_poll_skipped", reason="previous poll still running", skipped_count=self._oi_poll_skipped)
+                await asyncio.sleep(self.cfg.oi_poll_sec)
+                continue
+            self._oi_polling = True
+            started = time.monotonic()
             try:
                 await self.poll_open_interest(list(self.instruments.values()))
             except Exception as exc:
                 self.log.warning("oi_poll_error", error=str(exc)[:200])
+            finally:
+                self._oi_poll_duration_sec = time.monotonic() - started
+                self._oi_polling = False
             await asyncio.sleep(self.cfg.oi_poll_sec)
 
     async def _ticker_loop(self) -> None:
         while not self._stop.is_set():
+            if self._ticker_polling:
+                self._ticker_poll_skipped += 1
+                self.log.warning("ticker_poll_skipped", reason="previous poll still running", skipped_count=self._ticker_poll_skipped)
+                await asyncio.sleep(self.cfg.ticker_poll_sec)
+                continue
+            self._ticker_polling = True
+            started = time.monotonic()
             try:
                 await self.poll_tickers(list(self.instruments.values()))
             except Exception as exc:
                 self.log.warning("ticker_poll_error", error=str(exc)[:200])
+            finally:
+                self._ticker_poll_duration_sec = time.monotonic() - started
+                self._ticker_polling = False
             await asyncio.sleep(self.cfg.ticker_poll_sec)
 
     async def _catalog_loop(self) -> None:
@@ -437,7 +463,10 @@ class Collector(ABC):
             delta = {k: self.stats[k] - prev.get(k, 0) for k in self.stats}
             prev = dict(self.stats)
             connected = sum(1 for c in self._ws_clients if c.connected)
-            self.log.info("collector_stats", per_min=delta, ws_connected=connected, ws_total=len(self._ws_clients), instruments=len(self.instruments))
+            self.log.info("collector_stats", per_min=delta, ws_connected=connected, ws_total=len(self._ws_clients),
+                         instruments=len(self.instruments), ticker_poll_sec=round(self._ticker_poll_duration_sec, 2),
+                         oi_poll_sec=round(self._oi_poll_duration_sec, 2), ticker_skipped=self._ticker_poll_skipped,
+                         oi_skipped=self._oi_poll_skipped)
 
 
 def f(v: Any, default: float = 0.0) -> float:

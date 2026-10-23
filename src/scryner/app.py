@@ -62,7 +62,12 @@ async def run_feeds(cfg: ScrynerConfig, stop: asyncio.Event) -> None:
 
 
 async def run_all(cfg: ScrynerConfig, stop: asyncio.Event, subset: list[str] | None = None) -> None:
-    """Everything in one process over the in-memory bus (dev / small deployments)."""
+    """Everything in one process over the in-memory bus (dev / small deployments).
+
+    WARNING: All sources share CPU/memory in this mode. A misbehaving collector
+    can impact all others. For production with many sources, use worker mode:
+    docker-compose with one service per source + redis bus for isolation.
+    """
     from scryner.api.server import Gateway
     from scryner.feeds.runner import FeedRunner
 

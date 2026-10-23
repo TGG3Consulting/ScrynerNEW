@@ -1,12 +1,18 @@
 # Запуск на одном компьютере одним контейнером: все биржи, SQLite, без Redis/TimescaleDB/nginx.
 #   docker compose -f docker-compose.dev.yml up -d --build
-#   http://localhost:8080/advanced?route=all_futures
+#   http://localhost:8060/advanced?route=all_futures
+#
+# ВНИМАНИЕ: Режим "all" - все источники в одном процессе. Подходит для dev/testing.
+# Для production с большим количеством источников рекомендуется worker mode:
+# - Отдельный сервис на источник (изоляция CPU/памяти)
+# - Redis bus вместо memory (межпроцессное взаимодействие)
+# См. docker-compose.prod.yml для примера
 services:
   scryner:
     build: .
     restart: unless-stopped
-    command: ["all"]
-    ports: ["8080:8080"]
+    command: all
+    ports: ["8060:8080"]
     environment:
       SCRYNER_CONFIG: /app/config/scryner.yaml
       SCRYNER_APP__ENV: dev
